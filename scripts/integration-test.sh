@@ -72,28 +72,54 @@ chmod 0644 "$TMP/greenmail.p12"
 
 docker pull "$IMAGE" >/dev/null
 
-docker run -d --rm \
+docker run -d \
   --name "$CONTAINER" \
   -p 3025:3025 \
   -p 3993:3993 \
   -v "$TMP/greenmail.p12:/home/greenmail/greenmail.p12:ro" \
-  -e 'GREENMAIL_OPTS=-Dgreenmail.setup.test.smtp -Dgreenmail.setup.test.imaps -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.tls.keystore.file=/home/greenmail/greenmail.p12 -Dgreenmail.tls.keystore.password=changeit -Dgreenmail.users=integration:integration-secret@example.com' \
+  -e 'GREENMAIL_OPTS=-Dgreenmail.setup.test.smtp -Dgreenmail.setup.test.imaps -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.tls.keystore.file=/home/greenmail/greenmail.p12 -Dgreenmail.tls.keystore.password=changeit -Dgreenmail.tls.key.password=changeit -Dgreenmail.users=integration:integration-secret -Dgreenmail.startup.timeout=5000' \
   "$IMAGE" >/dev/null
 
-python3 - <<'PY'
+if ! python3 - "$TMP/ca.crt" <<'PY'
 import socket
+import ssl
+import sys
 import time
 
-for port in (3025, 3993):
-    for _ in range(60):
-        try:
-            with socket.create_connection(("127.0.0.1", port), timeout=1):
-                break
-        except OSError:
-            time.sleep(0.5)
-    else:
-        raise SystemExit(f"GreenMail port {port} did not become ready")
+ca_file = sys.argv[1]
+
+for _ in range(60):
+    try:
+        with socket.create_connection(("127.0.0.1", 3025), timeout=1) as sock:
+            banner = sock.recv(512)
+            if not banner.startswith(b"220"):
+                raise OSError(f"unexpected SMTP banner: {banner!r}")
+        break
+    except OSError:
+        time.sleep(0.5)
+else:
+    raise SystemExit("GreenMail SMTP did not become ready")
+
+context = ssl.create_default_context(cafile=ca_file)
+for _ in range(60):
+    try:
+        with socket.create_connection(("127.0.0.1", 3993), timeout=1) as raw:
+            with context.wrap_socket(raw, server_hostname="localhost") as tls:
+                banner = tls.recv(512)
+                if b"OK" not in banner.upper():
+                    raise OSError(f"unexpected IMAPS banner: {banner!r}")
+        break
+    except (OSError, ssl.SSLError):
+        time.sleep(0.5)
+else:
+    raise SystemExit("GreenMail IMAPS did not become ready with trusted TLS")
 PY
+then
+  echo "GreenMail failed readiness checks" >&2
+  docker ps -a --filter "name=$CONTAINER" >&2 || true
+  docker logs "$CONTAINER" >&2 || true
+  exit 1
+fi
 
 python3 "$ROOT/integration/seed_mail.py"
 
