@@ -53,12 +53,13 @@ jobs:
 
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             if git ls-remote --exit-code --tags origin "refs/tags/$VERSION" >/dev/null 2>&1; then
-              echo "Tag $VERSION already exists." >&2
-              exit 1
+              git fetch --force origin "refs/tags/$VERSION:refs/tags/$VERSION"
+              SHA="$(git rev-list -n 1 "$VERSION")"
+              echo "Reusing existing tag $VERSION at $SHA"
+            else
+              git tag "$VERSION" "$SHA"
+              git push origin "refs/tags/$VERSION"
             fi
-
-            git tag "$VERSION" "$SHA"
-            git push origin "refs/tags/$VERSION"
           fi
 
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -113,14 +114,30 @@ jobs:
       - build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          fetch-depth: 0
       - uses: actions/download-artifact@v7
         with:
           pattern: release-*
           path: dist
           merge-multiple: true
-      - name: Create GitHub Release
+      - name: Create or update GitHub Release
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           VERSION: ${{ needs.prepare.outputs.version }}
           SHA: ${{ needs.prepare.outputs.sha }}
-        run: gh release create "$VERSION" dist/* --generate-notes --verify-tag --target "$SHA"
+        run: |
+          set -euo pipefail
+          if gh release view "$VERSION" --repo "$GH_REPO" >/dev/null 2>&1; then
+            gh release upload "$VERSION" dist/* --clobber --repo "$GH_REPO"
+          else
+            gh release create "$VERSION" dist/* \
+              --generate-notes \
+              --verify-tag \
+              --target "$SHA" \
+              --repo "$GH_REPO"
+          fi
