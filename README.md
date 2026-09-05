@@ -119,6 +119,62 @@ workmail-mcp.exe doctor
 
 A successful check prints only a success status; credentials and message content are never logged.
 
+## Manual MCP stdio smoke tests on Windows
+
+You can test the MCP `stdio` transport directly, without Hermes or ChatGPT. Run these commands from the same Command Prompt where the required `WORKMAIL_*` variables are available.
+
+> **Windows note:** avoid piping multiple MCP JSON messages with `echo (...) | workmail-mcp.exe stdio`. `cmd.exe` writes CRLF line endings and this can cause framing errors such as `invalid trailing data at the end of stream`. The examples below use Python to write newline-delimited JSON (`\n`) and keep the bidirectional stdio session open while responses are read.
+
+The examples assume the release binary is named `workmail-mcp-windows-amd64.exe` and that the Python launcher is available as `py -3`.
+
+### 1. Verify MCP initialize and `tools/list`
+
+```cmd
+py -3 -c "import subprocess,json; p=subprocess.Popen(['workmail-mcp-windows-amd64.exe','stdio'],stdin=subprocess.PIPE,stdout=subprocess.PIPE); send=lambda x:(p.stdin.write(json.dumps(x,separators=(',',':')).encode()+b'\n'),p.stdin.flush()); send({'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'manual-test','version':'1.0'}}}); print('INIT:',p.stdout.readline().decode().strip()); send({'jsonrpc':'2.0','method':'notifications/initialized','params':{}}); send({'jsonrpc':'2.0','id':2,'method':'tools/list','params':{}}); print('TOOLS:',p.stdout.readline().decode().strip()); p.stdin.close(); p.terminate()"
+```
+
+A successful response should identify `workmail-mcp` and list these six tools:
+
+```text
+mail_list_folders
+mail_search
+mail_recent
+mail_get
+mail_get_attachment
+mail_get_thread
+```
+
+### 2. Call `mail_list_folders` through MCP
+
+This verifies the full path from a manual MCP client through `stdio` to the live IMAP mailbox:
+
+```cmd
+py -3 -c "import subprocess,json; p=subprocess.Popen(['workmail-mcp-windows-amd64.exe','stdio'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE); send=lambda x:(p.stdin.write(json.dumps(x,separators=(',',':')).encode()+b'\n'),p.stdin.flush()); send({'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'manual-test','version':'1.0'}}}); p.stdout.readline(); send({'jsonrpc':'2.0','method':'notifications/initialized','params':{}}); send({'jsonrpc':'2.0','id':2,'method':'tools/call','params':{'name':'mail_list_folders','arguments':{}}}); print(p.stdout.readline().decode().strip()); p.terminate()"
+```
+
+The result should contain mailbox folders such as `INBOX` and any other folders visible to the configured IMAP account.
+
+### 3. Call `mail_recent` through MCP
+
+This asks for up to five messages from the last seven days and returns metadata only:
+
+```cmd
+py -3 -c "import subprocess,json; p=subprocess.Popen(['workmail-mcp-windows-amd64.exe','stdio'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE); send=lambda x:(p.stdin.write(json.dumps(x,separators=(',',':')).encode()+b'\n'),p.stdin.flush()); send({'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'manual-test','version':'1.0'}}}); p.stdout.readline(); send({'jsonrpc':'2.0','method':'notifications/initialized','params':{}}); send({'jsonrpc':'2.0','id':2,'method':'tools/call','params':{'name':'mail_recent','arguments':{'folder':'INBOX','days':7,'limit':5}}}); print(p.stdout.readline().decode().strip()); p.terminate()"
+```
+
+Together with `workmail-mcp.exe doctor`, these tests separate failures cleanly:
+
+```text
+doctor
+  -> TLS / IMAP / authentication / folder access
+
+manual stdio initialize + tools/list
+  -> MCP stdio transport and tool schemas
+
+manual tools/call
+  -> MCP -> mail service -> live IMAP end-to-end
+```
+
 ## Hermes
 
 Hermes can launch the local binary directly through MCP stdio. Ensure the `WORKMAIL_*` environment variables are visible to the Hermes process, then configure a local MCP server similar to:
