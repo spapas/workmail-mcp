@@ -103,21 +103,39 @@ Protect secret files with Windows ACLs appropriate to your account and do not pl
 ## Commands
 
 ```text
-workmail-mcp stdio    MCP over stdin/stdout
-workmail-mcp serve    authenticated streamable HTTP MCP on loopback
-workmail-mcp doctor   test TLS, IMAP login, and folder listing
-workmail-mcp token    generate a 256-bit bearer token
-workmail-mcp version  print build version
-workmail-mcp help     usage
+workmail-mcp stdio                     MCP over stdin/stdout
+workmail-mcp serve                     authenticated streamable HTTP MCP on loopback
+workmail-mcp doctor                    test TLS, IMAP login, and folder listing
+workmail-mcp doctor --latest-subject   also test read-only message metadata access
+workmail-mcp token                     generate a 256-bit bearer token
+workmail-mcp version                   print build version
+workmail-mcp help                      usage
 ```
 
-Run the connectivity check before configuring a client:
+Run the privacy-safe connectivity check before configuring a client:
 
 ```cmd
 workmail-mcp.exe doctor
 ```
 
-A successful check prints only a success status; credentials and message content are never logged.
+A successful basic check prints only a success status; credentials and mailbox content are not printed.
+
+For a stronger end-to-end IMAP diagnostic, explicitly opt in to a message metadata probe:
+
+```cmd
+workmail-mcp.exe doctor --latest-subject
+```
+
+This performs the normal TLS/login/folder checks and then selects `WORKMAIL_DEFAULT_FOLDER` read-only, searches for the newest message, fetches envelope metadata only, and prints only its subject. It does **not** fetch the message body or attachments. The subject is untrusted mailbox data, is normalized to one line, and is truncated to 200 Unicode characters before display.
+
+Example:
+
+```text
+OK: IMAPS TLS, authentication, and folder listing succeeded
+OK: latest subject in INBOX [untrusted mailbox data]: Example message subject
+```
+
+If the configured default folder is empty, the command reports that the metadata probe succeeded and that the folder contains no messages.
 
 ## Manual MCP stdio smoke tests on Windows
 
@@ -162,11 +180,14 @@ This asks for up to five messages from the last seven days and returns metadata 
 py -3 -c "import subprocess,json; p=subprocess.Popen(['workmail-mcp-windows-amd64.exe','stdio'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE); send=lambda x:(p.stdin.write(json.dumps(x,separators=(',',':')).encode()+b'\n'),p.stdin.flush()); send({'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'manual-test','version':'1.0'}}}); p.stdout.readline(); send({'jsonrpc':'2.0','method':'notifications/initialized','params':{}}); send({'jsonrpc':'2.0','id':2,'method':'tools/call','params':{'name':'mail_recent','arguments':{'folder':'INBOX','days':7,'limit':5}}}); print(p.stdout.readline().decode().strip()); p.terminate()"
 ```
 
-Together with `workmail-mcp.exe doctor`, these tests separate failures cleanly:
+Together, the diagnostic paths separate failures cleanly:
 
 ```text
 doctor
-  -> TLS / IMAP / authentication / folder access
+  -> TLS / IMAP / authentication / folder listing
+
+doctor --latest-subject
+  -> read-only folder SELECT / SEARCH / envelope FETCH
 
 manual stdio initialize + tools/list
   -> MCP stdio transport and tool schemas
