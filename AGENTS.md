@@ -9,6 +9,10 @@ Primary clients:
 
 The first supported runtime target is Windows, while the code should remain portable to Linux where practical.
 
+## Repository branch convention
+
+The repository uses **`master` as its sole primary/default branch**. Do not introduce or reference a `main` branch in workflows, documentation, automation, or development instructions. Feature branches should branch from and target `master`.
+
 ## Core security invariants
 These rules are architectural constraints, not suggestions:
 
@@ -74,9 +78,9 @@ Mailbox behavior should be tested behind interfaces or fakes where possible. Tes
 ## CI and releases
 GitHub Actions is the source of truth for validation and binary builds.
 
-- Pull requests and pushes must run formatting checks, `go vet`, and `go test`.
+- Pull requests and pushes to `master` must run formatting checks, `go vet`, and `go test`.
 - Build CI should produce Windows and Linux amd64 binaries.
-- Release automation may later attach versioned binaries to GitHub Releases.
+- Releases are generated from version tags or the manual Release workflow on `master`.
 
 ## Secrets and local configuration
 Use environment variables or ignored local configuration files. Provide only safe example configuration in the repository.
