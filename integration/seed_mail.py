@@ -9,7 +9,7 @@ from email.utils import format_datetime
 
 HOST = "127.0.0.1"
 PORT = 3025
-RECIPIENT = "integration@example.com"
+RECIPIENT = "integration@localhost"
 SENDER = "sender@example.org"
 
 
