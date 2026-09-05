@@ -75,17 +75,19 @@ go vet ./...
 
 Mailbox behavior should be tested behind interfaces or fakes where possible. Tests must never require production mailbox credentials.
 
+CI also runs `scripts/integration-test.sh` against a disposable pinned GreenMail server. The integration suite must remain deterministic and must use only generated test credentials, certificates, and mailbox fixtures. It should exercise the real compiled binary over verified IMAPS and MCP stdio, including all six read-only tools. Do not weaken production TLS behavior for tests: certificate-chain and hostname verification must remain enabled, and `InsecureSkipVerify` must not be introduced.
+
 ## CI and releases
 GitHub Actions is the source of truth for validation and binary builds.
 
-- Pull requests and pushes to `master` must run formatting checks, `go vet`, and `go test`.
+- Pull requests and pushes to `master` must run formatting checks, `go vet`, `go test`, and the GreenMail IMAPS integration suite.
 - Build CI should produce Windows and Linux amd64 binaries.
 - Releases are generated from version tags or the manual Release workflow on `master`.
 
 ## Secrets and local configuration
 Use environment variables or ignored local configuration files. Provide only safe example configuration in the repository.
 
-Never add working credentials to test fixtures, examples, documentation, issue text, commits, or CI configuration.
+Never add working credentials to test fixtures, examples, documentation, issue text, commits, or CI configuration. Deterministic integration-test credentials that exist only inside the disposable local test server are allowed, but they must never be reused for a real system.
 
 ## Change discipline
 Security-sensitive changes should be small and reviewable.
@@ -98,4 +100,4 @@ Prefer this sequence:
 5. MCP HTTP localhost transport and bearer auth
 6. client-specific setup documentation
 
-Do not introduce databases, queues, vector stores, background synchronization, containers, or orchestration unless a concrete need appears.
+Do not introduce databases, queues, vector stores, background synchronization, containers, or orchestration unless a concrete need appears. The disposable GreenMail container used exclusively for integration testing is the intentional exception.
