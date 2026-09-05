@@ -245,6 +245,28 @@ scripts\check.cmd
 scripts\build.cmd
 ```
 
+### Automated IMAPS integration test
+
+CI also runs a deterministic integration suite against a disposable, pinned GreenMail server. The suite does not use production credentials or mailbox data.
+
+It:
+
+- generates an ephemeral test CA and a `localhost` server certificate;
+- starts GreenMail with SMTP for fixture injection and IMAPS for the application under test;
+- keeps TLS certificate-chain and hostname verification enabled;
+- seeds four known messages, including an attachment and a two-message thread;
+- builds the real `workmail-mcp` binary;
+- verifies `doctor --latest-subject`;
+- drives the real binary over MCP `stdio` and exercises all six read-only MCP tools.
+
+On Linux, or in a Linux environment with Docker, Python 3, OpenSSL, and Go installed, run the same suite with:
+
+```text
+bash scripts/integration-test.sh
+```
+
+The generated CA, certificate, test mailbox, password, messages, container, and temporary files exist only for the test run and are removed afterward. The test never enables `InsecureSkipVerify` or another TLS-verification bypass.
+
 The code is intentionally split so MCP handlers cannot issue raw IMAP commands directly:
 
 ```text
