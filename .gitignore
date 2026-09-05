@@ -1,0 +1,36 @@
+# Go build outputs
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.out
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+config.local.*
+secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Logs and runtime data
+*.log
+logs/
+tmp/
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
+
+# OS metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
