@@ -4,13 +4,69 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (for example v0.1.0)'
+        required: true
+        default: 'v0.1.0'
+        type: string
 
 permissions:
   contents: write
 
 jobs:
+  prepare:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      sha: ${{ steps.release.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.repository.default_branch || github.ref }}
+          fetch-depth: 0
+      - name: Resolve and validate release
+        id: release
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+          PUSH_VERSION: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            VERSION="$REQUESTED_VERSION"
+          else
+            VERSION="$PUSH_VERSION"
+          fi
+
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid version: $VERSION" >&2
+            echo "Use a version such as v0.1.0 or v0.1.0-rc.1." >&2
+            exit 1
+          fi
+
+          SHA="$(git rev-parse HEAD)"
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            if git ls-remote --exit-code --tags origin "refs/tags/$VERSION" >/dev/null 2>&1; then
+              echo "Tag $VERSION already exists." >&2
+              exit 1
+            fi
+
+            git tag "$VERSION" "$SHA"
+            git push origin "refs/tags/$VERSION"
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
   build:
     name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
+    needs: prepare
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -23,6 +79,8 @@ jobs:
             extension: ''
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
       - uses: actions/setup-go@v7
         with:
           go-version: '1.27.x'
@@ -34,10 +92,12 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: '0'
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
+          set -euo pipefail
           mkdir -p dist
           OUTPUT="dist/workmail-mcp-${GOOS}-${GOARCH}${{ matrix.extension }}"
-          go build -trimpath -ldflags="-s -w -X main.version=${GITHUB_REF_NAME}" -o "${OUTPUT}" ./cmd/workmail
+          go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o "${OUTPUT}" ./cmd/workmail
           cd dist
           sha256sum "$(basename "${OUTPUT}")" > "$(basename "${OUTPUT}").sha256"
       - uses: actions/upload-artifact@v7
@@ -47,7 +107,10 @@ jobs:
           if-no-files-found: error
 
   release:
-    needs: build
+    name: Publish release
+    needs:
+      - prepare
+      - build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v7
@@ -58,4 +121,6 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" dist/* --generate-notes --verify-tag
+          VERSION: ${{ needs.prepare.outputs.version }}
+          SHA: ${{ needs.prepare.outputs.sha }}
+        run: gh release create "$VERSION" dist/* --generate-notes --verify-tag --target "$SHA"
