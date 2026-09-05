@@ -1,0 +1,25 @@
+name: Module metadata
+
+on:
+  push:
+    branches:
+      - feat/complete-readonly-bridge
+
+permissions:
+  contents: read
+
+jobs:
+  tidy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.27.x'
+          check-latest: true
+      - name: Generate module metadata
+        run: |
+          go mod tidy
+          echo '---BEGIN GO.SUM---'
+          cat go.sum
+          echo '---END GO.SUM---'
