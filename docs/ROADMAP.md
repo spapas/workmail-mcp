@@ -1,52 +1,44 @@
 # Roadmap
 
-## Phase 0 — Repository foundation
-- [x] Go module and application entry point
-- [x] Repository guidance in `AGENTS.md`
-- [x] Secret-safe `.gitignore` and example environment file
-- [x] CI for formatting, vetting, and tests
-- [x] Automatic Windows/Linux binary artifacts
+## Implemented MVP
 
-## Phase 1 — Configuration and domain contracts
-- [ ] Typed configuration loading and validation
-- [ ] Mail domain models
-- [ ] Read-only mail service interface
-- [ ] Explicit limits and timeout policy
+- [x] Go module and repository conventions
+- [x] secret-safe configuration with `*_FILE` support
+- [x] read-only domain interface
+- [x] TLS IMAP backend with read-only folder selection
+- [x] folder listing and structured search
+- [x] bounded message/MIME retrieval
+- [x] bounded attachment retrieval
+- [x] bounded provider-independent thread reconstruction
+- [x] MCP stdio transport for Hermes
+- [x] streamable HTTP MCP transport on loopback
+- [x] bearer-token HTTP authentication
+- [x] non-sensitive audit logging
+- [x] `doctor`, `token`, `version`, and help commands
+- [x] unit tests and CI
+- [x] automatic Windows/Linux binary artifacts
+- [x] tag-driven GitHub Release workflow with checksums
+- [x] client/security/architecture documentation
 
-## Phase 2 — Zimbra/IMAP read-only backend
-- [ ] TLS IMAP connection with certificate verification
-- [ ] Folder listing
-- [ ] Message search
-- [ ] Message retrieval and MIME parsing
-- [ ] Attachment retrieval with size limits
-- [ ] Thread reconstruction
-- [ ] Unit/integration tests using non-production fixtures
+## Requires a real environment
 
-## Phase 3 — MCP over stdio for Hermes
-- [ ] MCP server lifecycle
-- [ ] Bounded read-only mail tools
-- [ ] Hermes configuration documentation
-- [ ] End-to-end local test
+- [ ] smoke-test against the owner's Zimbra server using real credentials kept outside GitHub
+- [ ] Hermes end-to-end tool invocation on the owner's Windows machine
+- [ ] ChatGPT end-to-end test when the account/workspace supports custom MCP and Secure MCP Tunnel
 
-## Phase 4 — localhost MCP HTTP mode
-- [ ] Bind to loopback only
-- [ ] Bearer-token authentication
-- [ ] Request limits and timeouts
-- [ ] Audit logging without sensitive content
-- [ ] ChatGPT connection/tunnel documentation
+## Possible later work (not required for the MVP)
 
-## Phase 5 — Hardening and releases
-- [ ] Security review of tool boundaries
-- [ ] Dependency review and pinning policy
-- [ ] Version command and build metadata
-- [ ] Tagged GitHub Releases with downloadable binaries
-- [ ] Windows installation/update documentation
+- connection reuse/pooling if measured latency justifies it
+- optional message-header-only fetch modes
+- provider-specific optimizations behind the same `mail.Service` interface
+- signed release binaries
 
-## Explicitly out of scope for the initial release
-- Sending email
-- Deleting or moving messages
-- Changing message flags
-- Creating folders
-- Raw/arbitrary IMAP commands
-- Full-mailbox synchronization
-- Database/vector-store indexing
+## Explicitly out of scope
+
+- sending mail
+- deleting/moving messages
+- changing flags
+- creating folders
+- raw/arbitrary IMAP commands
+- full mailbox synchronization
+- database or vector-store indexing
