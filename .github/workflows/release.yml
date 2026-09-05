@@ -34,6 +34,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           REQUESTED_VERSION: ${{ inputs.version }}
           PUSH_VERSION: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
 
@@ -49,16 +50,35 @@ jobs:
             exit 1
           fi
 
-          SHA="$(git rev-parse HEAD)"
+          HEAD_SHA="$(git rev-parse HEAD)"
+          SHA="$HEAD_SHA"
 
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             if git ls-remote --exit-code --tags origin "refs/tags/$VERSION" >/dev/null 2>&1; then
               git fetch --force origin "refs/tags/$VERSION:refs/tags/$VERSION"
-              SHA="$(git rev-list -n 1 "$VERSION")"
-              echo "Reusing existing tag $VERSION at $SHA"
+              TAG_SHA="$(git rev-list -n 1 "$VERSION")"
+
+              # Never move a tag that already has a published GitHub Release.
+              if curl --fail --silent --show-error \
+                -H 'Accept: application/vnd.github+json' \
+                "https://api.github.com/repos/${REPOSITORY}/releases/tags/${VERSION}" \
+                >/dev/null 2>&1; then
+                SHA="$TAG_SHA"
+                echo "Reusing published tag $VERSION at $SHA"
+              else
+                # A previous failed run may have created the tag before publishing.
+                # Repair only that unpublished tag so it points at the current master.
+                if [[ "$TAG_SHA" != "$HEAD_SHA" ]]; then
+                  echo "Repairing unpublished tag $VERSION: $TAG_SHA -> $HEAD_SHA"
+                  git tag --force "$VERSION" "$HEAD_SHA"
+                  git push --force origin "refs/tags/$VERSION"
+                fi
+                SHA="$HEAD_SHA"
+              fi
             else
-              git tag "$VERSION" "$SHA"
+              git tag "$VERSION" "$HEAD_SHA"
               git push origin "refs/tags/$VERSION"
+              SHA="$HEAD_SHA"
             fi
           fi
 
