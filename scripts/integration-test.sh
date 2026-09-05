@@ -77,7 +77,7 @@ docker run -d \
   -p 3025:3025 \
   -p 3993:3993 \
   -v "$TMP/greenmail.p12:/home/greenmail/greenmail.p12:ro" \
-  -e 'GREENMAIL_OPTS=-Dgreenmail.setup.test.smtp -Dgreenmail.setup.test.imaps -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.tls.keystore.file=/home/greenmail/greenmail.p12 -Dgreenmail.tls.keystore.password=changeit -Dgreenmail.tls.key.password=changeit -Dgreenmail.users=integration:integration-secret -Dgreenmail.startup.timeout=5000' \
+  -e 'GREENMAIL_OPTS=-Dgreenmail.setup.test.smtp -Dgreenmail.setup.test.imaps -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.tls.keystore.file=/home/greenmail/greenmail.p12 -Dgreenmail.tls.keystore.password=changeit -Dgreenmail.tls.key.password=changeit -Dgreenmail.users=integration:integration-secret@localhost -Dgreenmail.startup.timeout=5000' \
   "$IMAGE" >/dev/null
 
 if ! python3 - "$TMP/ca.crt" <<'PY'
