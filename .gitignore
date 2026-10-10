@@ -25,6 +25,10 @@ secrets/
 logs/
 tmp/
 
+# Python bytecode (integration drivers)
+__pycache__/
+*.pyc
+
 # Editors / IDEs
 .vscode/
 .idea/

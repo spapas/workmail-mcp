@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-10
+
 ### Added
 
 - Starter governance: `LICENSE` (MIT), `CONTRIBUTING.md`, this changelog, `.editorconfig`, `.gitattributes`.
@@ -16,7 +18,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   payloads, no direct write path). Verified-TLS SMTP send with IMAP-identity
   defaults; IMAP move (MOVE or COPY fallback), delete (STORE `\Deleted` +
   expunge), and allowlisted flag mutation; new SMTP config, `WORKMAIL_MAX_RECIPIENTS`,
-  and `WORKMAIL_CONFIRM_TTL` bounds.
+   and `WORKMAIL_CONFIRM_TTL` bounds.
+- GreenMail IMAPS integration coverage for the write flow
+  (`integration/mcp_write.py`): request + confirm for flags, move, delete,
+  and send, plus guardrail assertions (validation rejections, single-use and
+  unknown confirmation IDs).
+
+## [0.1.1] - 2026-10-10
+
+### Added
+
+- GreenMail IMAPS integration suite (read tools), `doctor --latest-subject`
+  probe, and manual MCP stdio smoke tests.
+- MCP Go SDK 1.7.0.
 
 ## [0.1.0] - 2026-10-10
 
