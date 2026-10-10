@@ -27,6 +27,13 @@ def message(subject: str, body: str, message_id: str, when: datetime) -> EmailMe
 def main() -> int:
     now = datetime.now(timezone.utc)
 
+    disposable = message(
+        "Integration disposable",
+        "disposable body marker for the delete flow\n",
+        "<disposable@workmail.test>",
+        now - timedelta(minutes=5),
+    )
+
     plain = message(
         "Integration plain message",
         "plain integration body marker\n",
@@ -64,10 +71,10 @@ def main() -> int:
     thread_reply["References"] = "<thread-root@workmail.test>"
 
     with smtplib.SMTP(HOST, PORT, timeout=10) as smtp:
-        for msg in (plain, attachment, thread_root, thread_reply):
+        for msg in (disposable, plain, attachment, thread_root, thread_reply):
             smtp.send_message(msg)
 
-    print("Seeded 4 integration messages")
+    print("Seeded 5 integration messages")
     return 0
 
 

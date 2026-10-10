@@ -1,0 +1,12 @@
+# Normalize line endings to LF in the repo; checkout adapts where needed.
+* text=auto eol=lf
+
+# Windows batch files keep CRLF for direct execution.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Binaries and secrets must not be mangled.
+*.exe binary
+*.p12 binary
+*.pfx binary
+*.pem binary

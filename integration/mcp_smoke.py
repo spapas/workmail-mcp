@@ -15,6 +15,11 @@ EXPECTED_TOOLS = {
     "mail_get",
     "mail_get_attachment",
     "mail_get_thread",
+    "mail_send_request",
+    "mail_move_request",
+    "mail_delete_request",
+    "mail_set_flags_request",
+    "mail_confirm",
 }
 
 

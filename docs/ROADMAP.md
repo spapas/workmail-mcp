@@ -17,11 +17,12 @@
 - [x] `doctor`, `doctor --latest-subject`, `token`, `version`, and help commands
 - [x] unit tests, formatting checks, and `go vet` in CI
 - [x] deterministic GreenMail IMAPS integration tests with trusted ephemeral TLS
-- [x] end-to-end MCP stdio regression coverage for all six read-only tools
+- [x] end-to-end MCP stdio regression coverage for all eleven tools (six reads + two-phase write flow)
 - [x] automatic Windows/Linux binary artifacts
 - [x] tag-driven GitHub Release workflow with checksums
 - [x] client/security/architecture documentation
 - [x] basic smoke test against the owner's Zimbra server: TLS, authentication, folder listing, MCP initialize/tools list, and `mail_list_folders`
+- [x] two-phase write operations with mandatory confirmation: send (verified SMTP), move, delete, flag mutation (`mail_*_request` + `mail_confirm`, single-use expiring IDs, no direct write path)
 
 ## Requires the owner's real environment
 
@@ -36,11 +37,13 @@
 - provider-specific optimizations behind the same `mail.Service` interface
 - signed release binaries
 
+## Requires the owner's real environment (write validation)
+
+- [ ] end-to-end send/move/delete/flags confirmation flow against Zimbra
+- [ ] Hermes end-to-end write invocation (request + confirm) on the owner's Windows machine
+
 ## Explicitly out of scope
 
-- sending mail
-- deleting/moving messages
-- changing flags
 - creating folders
 - raw/arbitrary IMAP commands
 - full mailbox synchronization

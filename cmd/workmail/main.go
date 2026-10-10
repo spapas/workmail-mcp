@@ -86,13 +86,13 @@ func run() error {
 		if err := cfg.ValidateIMAP(); err != nil {
 			return fmt.Errorf("configuration: %w", err)
 		}
-		server := mcpserver.NewServer(backend, cfg, logger, version)
+		server := mcpserver.NewServer(backend, backend, cfg, logger, version)
 		return mcpserver.RunStdio(ctx, server)
 	case "serve":
 		if err := cfg.ValidateHTTP(); err != nil {
 			return fmt.Errorf("configuration: %w", err)
 		}
-		server := mcpserver.NewServer(backend, cfg, logger, version)
+		server := mcpserver.NewServer(backend, backend, cfg, logger, version)
 		return mcpserver.RunHTTP(ctx, server, cfg, logger)
 	default:
 		return fmt.Errorf("unknown command %q; run workmail-mcp help", command)

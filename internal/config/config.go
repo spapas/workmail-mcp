@@ -12,6 +12,7 @@ import (
 
 const (
 	defaultIMAPPort                 = 993
+	defaultSMTPPort                 = 465
 	defaultHTTPAddr                 = "127.0.0.1:8787"
 	defaultFolder                   = "INBOX"
 	defaultMaxResults               = 50
@@ -20,7 +21,9 @@ const (
 	defaultMaxBodyBytes       int64 = 512 << 10
 	defaultMaxAttachmentBytes int64 = 10 << 20
 	defaultMaxThreadMessages        = 50
+	defaultMaxRecipients            = 50
 	defaultOperationTimeout         = 30 * time.Second
+	defaultConfirmTTL               = 5 * time.Minute
 )
 
 // Config contains runtime settings for the workmail bridge.
@@ -29,6 +32,11 @@ type Config struct {
 	IMAPPort           int
 	IMAPUsername       string
 	IMAPPassword       string
+	SMTPHost           string
+	SMTPPort           int
+	SMTPUsername       string
+	SMTPPassword       string
+	SMTPFrom           string
 	HTTPAddr           string
 	APIToken           string
 	DefaultFolder      string
@@ -38,7 +46,9 @@ type Config struct {
 	MaxBodyBytes       int64
 	MaxAttachmentBytes int64
 	MaxThreadMessages  int
+	MaxRecipients      int
 	OperationTimeout   time.Duration
+	ConfirmTTL         time.Duration
 }
 
 // Load reads configuration from environment variables and optional *_FILE secret sources.
@@ -51,12 +61,21 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	smtpPassword, err := readSecret("WORKMAIL_SMTP_PASSWORD", "WORKMAIL_SMTP_PASSWORD_FILE")
+	if err != nil {
+		return Config{}, err
+	}
 
 	cfg := Config{
 		IMAPHost:           strings.TrimSpace(os.Getenv("WORKMAIL_IMAP_HOST")),
 		IMAPPort:           defaultIMAPPort,
 		IMAPUsername:       strings.TrimSpace(os.Getenv("WORKMAIL_IMAP_USERNAME")),
 		IMAPPassword:       password,
+		SMTPHost:           strings.TrimSpace(os.Getenv("WORKMAIL_SMTP_HOST")),
+		SMTPPort:           defaultSMTPPort,
+		SMTPUsername:       strings.TrimSpace(os.Getenv("WORKMAIL_SMTP_USERNAME")),
+		SMTPPassword:       smtpPassword,
+		SMTPFrom:           strings.TrimSpace(os.Getenv("WORKMAIL_SMTP_FROM")),
 		HTTPAddr:           envOr("WORKMAIL_HTTP_ADDR", defaultHTTPAddr),
 		APIToken:           token,
 		DefaultFolder:      envOr("WORKMAIL_DEFAULT_FOLDER", defaultFolder),
@@ -66,10 +85,29 @@ func Load() (Config, error) {
 		MaxBodyBytes:       defaultMaxBodyBytes,
 		MaxAttachmentBytes: defaultMaxAttachmentBytes,
 		MaxThreadMessages:  defaultMaxThreadMessages,
+		MaxRecipients:      defaultMaxRecipients,
 		OperationTimeout:   defaultOperationTimeout,
+		ConfirmTTL:         defaultConfirmTTL,
+	}
+	// Zero-config Zimbra default: reuse the IMAP connection identity for SMTP
+	// unless explicit SMTP overrides are provided.
+	if cfg.SMTPHost == "" {
+		cfg.SMTPHost = cfg.IMAPHost
+	}
+	if cfg.SMTPUsername == "" {
+		cfg.SMTPUsername = cfg.IMAPUsername
+	}
+	if cfg.SMTPPassword == "" {
+		cfg.SMTPPassword = cfg.IMAPPassword
+	}
+	if cfg.SMTPFrom == "" {
+		cfg.SMTPFrom = cfg.SMTPUsername
 	}
 
 	if err := loadInt("WORKMAIL_IMAP_PORT", &cfg.IMAPPort); err != nil {
+		return Config{}, err
+	}
+	if err := loadInt("WORKMAIL_SMTP_PORT", &cfg.SMTPPort); err != nil {
 		return Config{}, err
 	}
 	if err := loadInt("WORKMAIL_MAX_RESULTS", &cfg.MaxResults); err != nil {
@@ -90,12 +128,22 @@ func Load() (Config, error) {
 	if err := loadInt("WORKMAIL_MAX_THREAD_MESSAGES", &cfg.MaxThreadMessages); err != nil {
 		return Config{}, err
 	}
+	if err := loadInt("WORKMAIL_MAX_RECIPIENTS", &cfg.MaxRecipients); err != nil {
+		return Config{}, err
+	}
 	if raw := strings.TrimSpace(os.Getenv("WORKMAIL_OPERATION_TIMEOUT")); raw != "" {
 		d, err := time.ParseDuration(raw)
 		if err != nil {
 			return Config{}, fmt.Errorf("WORKMAIL_OPERATION_TIMEOUT: %w", err)
 		}
 		cfg.OperationTimeout = d
+	}
+	if raw := strings.TrimSpace(os.Getenv("WORKMAIL_CONFIRM_TTL")); raw != "" {
+		d, err := time.ParseDuration(raw)
+		if err != nil {
+			return Config{}, fmt.Errorf("WORKMAIL_CONFIRM_TTL: %w", err)
+		}
+		cfg.ConfirmTTL = d
 	}
 	return cfg, cfg.validateLimits()
 }
@@ -136,6 +184,27 @@ func (c Config) ValidateHTTP() error {
 	return errors.Join(errs...)
 }
 
+// ValidateSMTP checks settings required for sending mail.
+func (c Config) ValidateSMTP() error {
+	var errs []error
+	if c.SMTPHost == "" {
+		errs = append(errs, errors.New("WORKMAIL_SMTP_HOST is required (defaults to WORKMAIL_IMAP_HOST)"))
+	}
+	if c.SMTPPort < 1 || c.SMTPPort > 65535 {
+		errs = append(errs, errors.New("WORKMAIL_SMTP_PORT must be between 1 and 65535"))
+	}
+	if c.SMTPUsername == "" {
+		errs = append(errs, errors.New("WORKMAIL_SMTP_USERNAME is required (defaults to WORKMAIL_IMAP_USERNAME)"))
+	}
+	if c.SMTPPassword == "" {
+		errs = append(errs, errors.New("WORKMAIL_SMTP_PASSWORD or WORKMAIL_SMTP_PASSWORD_FILE is required (defaults to the IMAP password)"))
+	}
+	if strings.TrimSpace(c.SMTPFrom) == "" {
+		errs = append(errs, errors.New("WORKMAIL_SMTP_FROM is required (defaults to the SMTP username)"))
+	}
+	return errors.Join(errs...)
+}
+
 // ValidateLoopbackAddr rejects addresses that can expose the HTTP server beyond localhost.
 func ValidateLoopbackAddr(addr string) error {
 	host, port, err := net.SplitHostPort(addr)
@@ -170,6 +239,15 @@ func (c Config) validateLimits() error {
 	}
 	if c.MaxThreadMessages < 1 || c.MaxThreadMessages > 200 {
 		return errors.New("WORKMAIL_MAX_THREAD_MESSAGES must be between 1 and 200")
+	}
+	if c.MaxRecipients < 1 || c.MaxRecipients > 100 {
+		return errors.New("WORKMAIL_MAX_RECIPIENTS must be between 1 and 100")
+	}
+	if c.ConfirmTTL < time.Minute || c.ConfirmTTL > 30*time.Minute {
+		return errors.New("WORKMAIL_CONFIRM_TTL must be between 1m and 30m")
+	}
+	if c.SMTPPort < 1 || c.SMTPPort > 65535 {
+		return errors.New("WORKMAIL_SMTP_PORT must be between 1 and 65535")
 	}
 	if c.OperationTimeout < time.Second || c.OperationTimeout > 5*time.Minute {
 		return errors.New("WORKMAIL_OPERATION_TIMEOUT must be between 1s and 5m")

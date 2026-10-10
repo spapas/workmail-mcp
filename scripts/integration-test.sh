@@ -132,6 +132,11 @@ export WORKMAIL_IMAP_PASSWORD=integration-secret
 export WORKMAIL_DEFAULT_FOLDER=INBOX
 export WORKMAIL_OPERATION_TIMEOUT=10s
 export SSL_CERT_FILE="$TMP/ca.crt"
+# Write-flow SMTP against GreenMail's plaintext test listener. HOST/credentials
+# default to the IMAP identity; only the port and a valid From address differ.
+# (Local plaintext SMTP here is test-only; production SMTP is verified TLS.)
+export WORKMAIL_SMTP_PORT=3025
+export WORKMAIL_SMTP_FROM=integration@localhost
 
 doctor_output="$($BIN doctor --latest-subject)"
 printf '%s\n' "$doctor_output"
@@ -140,5 +145,7 @@ printf '%s\n' "$doctor_output" | grep -F "OK: latest subject in INBOX" >/dev/nul
 printf '%s\n' "$doctor_output" | grep -F "Re: Integration thread" >/dev/null
 
 python3 "$ROOT/integration/mcp_smoke.py" "$BIN"
+
+python3 "$ROOT/integration/mcp_write.py" "$BIN"
 
 echo "OK: GreenMail IMAPS integration test passed"

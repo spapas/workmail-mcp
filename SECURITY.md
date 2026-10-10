@@ -4,18 +4,26 @@
 
 ## Supported security model
 
-The initial implementation is read-only and follows these principles:
+The bridge exposes read tools plus four write capabilities (send, move,
+delete, flag mutation), all gated by mandatory two-phase confirmation:
 
-- no SMTP sending
-- no message deletion or movement
-- no flag mutation or expunge
+- no direct write path: every write is `mail_*_request` (freeze) + `mail_confirm` (execute once)
+- single-use, expiring confirmation IDs; frozen payloads cannot be altered at confirm time
 - no raw/arbitrary IMAP command execution
-- TLS with certificate verification for IMAP
+- TLS with certificate verification for IMAP and SMTP (implicit TLS or STARTTLS, TLS 1.2+)
 - loopback-only HTTP binding when HTTP transport is enabled
 - bearer-token authentication for HTTP mode
 - bounded inputs and explicit timeouts
-- mailbox content treated as untrusted data
-- no secrets or mailbox content in logs
+- mailbox content treated as untrusted data: email bodies are never
+  interpreted as instructions, and a malicious message cannot bypass the
+  human confirmation step on its own
+- no secrets, recipients, bodies, or mailbox content in logs
+
+Write-specific risks (prompt-injection-triggered send/delete, irreversible
+expunge) are mitigated by the confirmation gate, the flag allowlist
+(`\Deleted` is only reachable via the delete flow), BCC envelope-only
+handling, and per-operation timeouts. Review each `mail_*_request` summary
+before confirming.
 
 ## Reporting a vulnerability
 

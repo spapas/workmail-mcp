@@ -1,6 +1,6 @@
 # workmail-mcp
 
-`workmail-mcp` is a small, local, security-focused **read-only** bridge between an IMAP mailbox (initially Zimbra) and MCP-capable AI clients.
+`workmail-mcp` is a small, local, security-focused bridge between an IMAP mailbox (initially Zimbra) and MCP-capable AI clients. Reads are direct; every write (send, move, delete, flag mutation) requires a two-phase `mail_*_request` + `mail_confirm` confirmation.
 
 The primary target is Windows. One binary supports:
 
@@ -9,15 +9,18 @@ The primary target is Windows. One binary supports:
 
 ## Security boundary
 
+Writes are two-phase only: `mail_send_request`, `mail_move_request`,
+`mail_delete_request`, and `mail_set_flags_request` freeze a validated
+operation, and `mail_confirm` executes it once by single-use expiring ID.
+There is no direct write path.
+
 The project deliberately does **not** implement:
 
-- SMTP / sending mail
-- delete, move, expunge, or flag mutation
 - folder creation
 - arbitrary/raw IMAP commands
 - a public network listener
 
-IMAP is always implicit TLS (`IMAPS`, normally port 993) with normal certificate and hostname verification. HTTP mode refuses non-loopback bind addresses and requires a bearer token. Email bodies and attachments are treated as untrusted data.
+IMAP is always implicit TLS (`IMAPS`, normally port 993) with normal certificate and hostname verification. SMTP send uses verified TLS (implicit TLS on 465, otherwise STARTTLS when offered). HTTP mode refuses non-loopback bind addresses and requires a bearer token. Email bodies and attachments are treated as untrusted data.
 
 See [SECURITY.md](SECURITY.md) for the threat model.
 
@@ -31,8 +34,15 @@ See [SECURITY.md](SECURITY.md) for the threat model.
 | `mail_get` | One bounded message body plus attachment metadata |
 | `mail_get_attachment` | One bounded attachment as base64 |
 | `mail_get_thread` | Bounded thread reconstruction using mail identifiers |
+| `mail_send_request` | Stage an email send (frozen; needs `mail_confirm`) |
+| `mail_move_request` | Stage moving one message to an existing folder (frozen; needs `mail_confirm`) |
+| `mail_delete_request` | Stage permanent delete of one message (frozen; needs `mail_confirm`) |
+| `mail_set_flags_request` | Stage a flag update, allowlisted flags only (frozen; needs `mail_confirm`) |
+| `mail_confirm` | Execute one staged write by `pending_id` (single-use, expiring) |
 
-All tools are read-only.
+Read tools are direct. Every write is two-phase: `mail_*_request` freezes the
+exact operation and returns a `pending_id`, and `mail_confirm` executes it
+once. There is no direct write path. See [docs/WRITE.md](docs/WRITE.md).
 
 ## Install
 
@@ -66,6 +76,18 @@ WORKMAIL_HTTP_ADDR=127.0.0.1:8787
 WORKMAIL_API_TOKEN           OR WORKMAIL_API_TOKEN_FILE
 ```
 
+Sending mail uses SMTP with verified TLS (implicit TLS on 465, otherwise
+STARTTLS when offered). SMTP identity defaults to the IMAP identity, so a
+typical Zimbra setup needs no extra variables; overrides when needed:
+
+```text
+WORKMAIL_SMTP_HOST               (default: WORKMAIL_IMAP_HOST)
+WORKMAIL_SMTP_PORT=465
+WORKMAIL_SMTP_USERNAME           (default: WORKMAIL_IMAP_USERNAME)
+WORKMAIL_SMTP_PASSWORD       OR WORKMAIL_SMTP_PASSWORD_FILE  (default: IMAP password)
+WORKMAIL_SMTP_FROM               (default: SMTP username)
+```
+
 Optional bounded defaults:
 
 ```text
@@ -76,6 +98,8 @@ WORKMAIL_MAX_MESSAGE_BYTES=26214400
 WORKMAIL_MAX_BODY_BYTES=524288
 WORKMAIL_MAX_ATTACHMENT_BYTES=10485760
 WORKMAIL_MAX_THREAD_MESSAGES=50
+WORKMAIL_MAX_RECIPIENTS=50
+WORKMAIL_CONFIRM_TTL=5m
 WORKMAIL_OPERATION_TIMEOUT=30s
 ```
 
@@ -257,7 +281,7 @@ It:
 - seeds four known messages, including an attachment and a two-message thread;
 - builds the real `workmail-mcp` binary;
 - verifies `doctor --latest-subject`;
-- drives the real binary over MCP `stdio` and exercises all six read-only MCP tools.
+- drives the real binary over MCP `stdio` and exercises all eleven MCP tools: the six reads plus the full two-phase write flow (flags, move, delete, send with `mail_confirm`).
 
 On Linux, or in a Linux environment with Docker, Python 3, OpenSSL, and Go installed, run the same suite with:
 
