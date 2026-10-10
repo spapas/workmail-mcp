@@ -48,7 +48,14 @@ once. There is no direct write path. See [docs/WRITE.md](docs/WRITE.md).
 
 GitHub Actions builds `windows/amd64` and `linux/amd64` binaries on every push and pull request. Tagged releases are configured to publish versioned binaries and SHA-256 checksums.
 
-For Windows, place `workmail-mcp-windows-amd64.exe` somewhere such as:
+On Windows, the easiest path is Scoop:
+
+```powershell
+scoop bucket add spapas https://github.com/spapas/scoop-bucket
+scoop install workmail-mcp
+```
+
+Alternatively, place `workmail-mcp-windows-amd64.exe` somewhere such as:
 
 ```text
 C:\Tools\workmail-mcp\workmail-mcp.exe
