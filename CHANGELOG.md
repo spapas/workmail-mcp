@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-12
+
+### Added
+
+- IMAP flags (`\Seen`, `\Flagged`, `\Answered`, `\Draft`, `\Deleted`) in
+  message summaries returned by `mail_search`, `mail_recent`, `mail_get`,
+  and `mail_get_thread` (via `FETCH FLAGS`, read-only; reading still never
+  sets `\Seen`).
+
 ## [0.2.0] - 2026-10-10
 
 ### Added

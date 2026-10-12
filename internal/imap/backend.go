@@ -304,7 +304,7 @@ func (b *Backend) fetchSummaries(c *imapclient.Client, folder string, uids []ima
 	if len(uids) == 0 {
 		return []maildomain.MessageSummary{}, nil
 	}
-	items, err := c.Fetch(imapv2.UIDSetNum(uids...), &imapv2.FetchOptions{UID: true, Envelope: true, InternalDate: true, RFC822Size: true}).Collect()
+	items, err := c.Fetch(imapv2.UIDSetNum(uids...), &imapv2.FetchOptions{UID: true, Envelope: true, Flags: true, InternalDate: true, RFC822Size: true}).Collect()
 	if err != nil {
 		return nil, fmt.Errorf("fetch summaries: %w", err)
 	}
@@ -348,6 +348,13 @@ func (b *Backend) fetchRaw(c *imapclient.Client, folder string, uid imapv2.UID) 
 
 func summaryFromBuffer(folder string, item *imapclient.FetchMessageBuffer) maildomain.MessageSummary {
 	out := maildomain.MessageSummary{UID: uint32(item.UID), Folder: folder, Date: item.InternalDate, Size: item.RFC822Size}
+	for _, flag := range item.Flags {
+		s := string(flag)
+		if s != "" {
+			out.Flags = append(out.Flags, s)
+		}
+	}
+	sort.Strings(out.Flags)
 	if env := item.Envelope; env != nil {
 		out.Subject = env.Subject
 		out.From = convertAddresses(env.From)

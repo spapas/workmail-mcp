@@ -29,11 +29,11 @@ See [SECURITY.md](SECURITY.md) for the threat model.
 | Tool | Purpose |
 | --- | --- |
 | `mail_list_folders` | List visible IMAP folders |
-| `mail_search` | Structured full-text/header/date search returning metadata |
-| `mail_recent` | Recent message metadata |
-| `mail_get` | One bounded message body plus attachment metadata |
+| `mail_search` | Structured full-text/header/date search returning metadata (including IMAP flags, e.g. `\Seen`) |
+| `mail_recent` | Recent message metadata (including IMAP flags) |
+| `mail_get` | One bounded message body plus attachment metadata (including IMAP flags) |
 | `mail_get_attachment` | One bounded attachment as base64 |
-| `mail_get_thread` | Bounded thread reconstruction using mail identifiers |
+| `mail_get_thread` | Bounded thread reconstruction using mail identifiers (including IMAP flags) |
 | `mail_send_request` | Stage an email send (frozen; needs `mail_confirm`) |
 | `mail_move_request` | Stage moving one message to an existing folder (frozen; needs `mail_confirm`) |
 | `mail_delete_request` | Stage permanent delete of one message (frozen; needs `mail_confirm`) |

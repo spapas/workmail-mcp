@@ -37,6 +37,8 @@ The current implementation opens a fresh IMAPS connection per top-level tool ope
 
 `mail_get` and `mail_get_attachment` first fetch message metadata including `RFC822.SIZE`. The whole MIME message is fetched only when that size is within `WORKMAIL_MAX_MESSAGE_BYTES`.
 
+Message summaries (`mail_search`, `mail_recent`, `mail_get`, `mail_get_thread`) include `FLAGS` from `FETCH`, so clients can see `\Seen`/`\Flagged`/`\Answered`/`\Draft`/`\Deleted` state. Reads still select the folder `ReadOnly: true` and fetch bodies with `BODY.PEEK`, so merely reading never sets `\Seen`.
+
 ## MIME handling
 
 `go-message` performs MIME/transfer/charset decoding. Text and HTML are returned separately and bounded. Attachment payloads are not returned by `mail_get`; only metadata is. `mail_get_attachment` returns a single attachment as base64 and rejects attachments beyond the configured maximum.

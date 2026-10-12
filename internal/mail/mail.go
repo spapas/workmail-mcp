@@ -40,6 +40,9 @@ type MessageSummary struct {
 	MessageID string    `json:"message_id,omitempty"`
 	InReplyTo []string  `json:"in_reply_to,omitempty"`
 	Size      int64     `json:"size"`
+	// Flags holds the IMAP flags reported for the message (for example
+	// \Seen, \Flagged, \Answered, \Draft, \Deleted), as returned by FETCH FLAGS.
+	Flags []string `json:"flags,omitempty"`
 }
 
 // Message contains message metadata plus bounded text/HTML bodies and attachment metadata.

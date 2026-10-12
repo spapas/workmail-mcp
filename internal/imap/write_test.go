@@ -4,6 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	imapv2 "github.com/emersion/go-imap/v2"
+	"github.com/emersion/go-imap/v2/imapclient"
+
 	maildomain "github.com/spapas/workmail-mcp/internal/mail"
 )
 
@@ -40,5 +43,22 @@ func TestBuildSendBytesRequiresBody(t *testing.T) {
 	req := maildomain.SendRequest{To: []string{"a@example.com"}, BodyText: "x"}
 	if _, _, err := buildSendBytes("not-an-email", req); err == nil {
 		t.Fatal("expected invalid from rejection")
+	}
+}
+
+// TestSummaryFromBufferIncludesFlags ensures FETCH FLAGS are surfaced on
+// message summaries so clients can distinguish Seen/Unseen messages.
+func TestSummaryFromBufferIncludesFlags(t *testing.T) {
+	item := &imapclient.FetchMessageBuffer{
+		UID:   42,
+		Flags: []imapv2.Flag{imapv2.FlagSeen, imapv2.FlagFlagged},
+	}
+	got := summaryFromBuffer("INBOX", item)
+	if len(got.Flags) != 2 || got.Flags[0] != `\Flagged` || got.Flags[1] != `\Seen` {
+		t.Fatalf("unexpected flags: %q", got.Flags)
+	}
+	empty := summaryFromBuffer("INBOX", &imapclient.FetchMessageBuffer{UID: 43})
+	if len(empty.Flags) != 0 {
+		t.Fatalf("expected no flags, got %q", empty.Flags)
 	}
 }
