@@ -52,6 +52,7 @@ Read tools (direct):
 - `mail_get`
 - `mail_recent`
 - `mail_list_folders`
+- `mail_stats`
 - `mail_get_attachment`
 - `mail_get_thread`
 
@@ -125,7 +126,7 @@ go vet ./...
 
 Mailbox behavior should be tested behind interfaces or fakes where possible. Tests must never require production mailbox credentials.
 
-CI also runs `scripts/integration-test.sh` against a disposable pinned GreenMail server. The integration suite must remain deterministic and must use only generated test credentials, certificates, and mailbox fixtures. It should exercise the real compiled binary over verified IMAPS and MCP stdio, including all six read tools and the full two-phase write flow (flags, move, delete, send). Do not weaken production TLS behavior for tests: certificate-chain and hostname verification must remain enabled, and `InsecureSkipVerify` must not be introduced.
+CI also runs `scripts/integration-test.sh` against a disposable pinned GreenMail server. The integration suite must remain deterministic and must use only generated test credentials, certificates, and mailbox fixtures. It should exercise the real compiled binary over verified IMAPS and MCP stdio, including all seven read tools and the full two-phase write flow (flags, move, delete, send). Do not weaken production TLS behavior for tests: certificate-chain and hostname verification must remain enabled, and `InsecureSkipVerify` must not be introduced.
 
 ## Definition of done for a change
 

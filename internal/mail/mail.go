@@ -61,6 +61,14 @@ type Attachment struct {
 	DataBase64 string `json:"data_base64"`
 }
 
+// FolderStats contains total and unseen message counts for one folder.
+// Counts come from IMAP STATUS and never include message content.
+type FolderStats struct {
+	Folder string `json:"folder"`
+	Total  uint32 `json:"total"`
+	Unseen uint32 `json:"unseen"`
+}
+
 // SearchQuery is a bounded, structured mailbox search.
 type SearchQuery struct {
 	Folder  string
@@ -80,4 +88,6 @@ type Service interface {
 	GetMessage(context.Context, string, uint32) (Message, error)
 	GetAttachment(context.Context, string, uint32, int) (Attachment, error)
 	GetThread(context.Context, string, uint32, int) ([]MessageSummary, error)
+	// Stats returns total and unseen message counts for one folder.
+	Stats(context.Context, string) (FolderStats, error)
 }

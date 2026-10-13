@@ -10,6 +10,7 @@ from typing import Any
 
 EXPECTED_TOOLS = {
     "mail_list_folders",
+    "mail_stats",
     "mail_search",
     "mail_recent",
     "mail_get",
@@ -117,6 +118,10 @@ def main() -> int:
         folders = client.call_tool("mail_list_folders", {})["folders"]
         assert any(folder.get("name") == "INBOX" for folder in folders), folders
 
+        stats = client.call_tool("mail_stats", {"folder": "INBOX"})["stats"]
+        assert stats.get("folder") == "INBOX", stats
+        assert int(stats.get("total", 0)) >= 4, stats
+
         recent = client.call_tool(
             "mail_recent", {"folder": "INBOX", "days": 1, "limit": 10}
         )["messages"]
@@ -165,7 +170,7 @@ def main() -> int:
         assert {"Integration thread", "Re: Integration thread"}.issubset(thread_subjects), thread
 
         print("OK: MCP stdio integration suite passed")
-        print("OK: folders, recent, search, get, attachment, and thread tools passed")
+        print("OK: folders, stats, recent, search, get, attachment, and thread tools passed")
         return 0
     finally:
         client.close()

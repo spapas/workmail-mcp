@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-13
+
+### Added
+
+- Read-only `mail_stats` tool: total/unseen counts per folder via IMAP
+  STATUS (counts only, no message content, no flag changes).
+
 ## [0.3.0] - 2026-10-12
 
 ### Added

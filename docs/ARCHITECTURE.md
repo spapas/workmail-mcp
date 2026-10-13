@@ -39,6 +39,8 @@ The current implementation opens a fresh IMAPS connection per top-level tool ope
 
 Message summaries (`mail_search`, `mail_recent`, `mail_get`, `mail_get_thread`) include `FLAGS` from `FETCH`, so clients can see `\Seen`/`\Flagged`/`\Answered`/`\Draft`/`\Deleted` state. Reads still select the folder `ReadOnly: true` and fetch bodies with `BODY.PEEK`, so merely reading never sets `\Seen`.
 
+`mail_stats` uses IMAP `STATUS` (`MESSAGES`, `UNSEEN`) for exact folder counts. It transfers no message content and alters no flags, so it stays within the read-only capability surface.
+
 ## MIME handling
 
 `go-message` performs MIME/transfer/charset decoding. Text and HTML are returned separately and bounded. Attachment payloads are not returned by `mail_get`; only metadata is. `mail_get_attachment` returns a single attachment as base64 and rejects attachments beyond the configured maximum.

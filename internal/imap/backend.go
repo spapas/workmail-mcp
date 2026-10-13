@@ -77,6 +77,35 @@ func (b *Backend) ListFolders(ctx context.Context) ([]maildomain.Folder, error) 
 	return folders, nil
 }
 
+// Stats returns total and unseen message counts for one folder using IMAP
+// STATUS. It never fetches message content and never alters flags.
+func (b *Backend) Stats(ctx context.Context, folder string) (maildomain.FolderStats, error) {
+	ctx, cancel := context.WithTimeout(ctx, b.cfg.OperationTimeout)
+	defer cancel()
+	folder, err := b.normalizeFolder(folder)
+	if err != nil {
+		return maildomain.FolderStats{}, err
+	}
+	c, cleanup, err := b.connect(ctx)
+	if err != nil {
+		return maildomain.FolderStats{}, err
+	}
+	defer cleanup()
+
+	data, err := c.Status(folder, &imapv2.StatusOptions{NumMessages: true, NumUnseen: true}).Wait()
+	if err != nil {
+		return maildomain.FolderStats{}, fmt.Errorf("status %q: %w", folder, err)
+	}
+	out := maildomain.FolderStats{Folder: folder}
+	if data.NumMessages != nil {
+		out.Total = *data.NumMessages
+	}
+	if data.NumUnseen != nil {
+		out.Unseen = *data.NumUnseen
+	}
+	return out, nil
+}
+
 // Search executes a structured IMAP search and returns bounded metadata.
 func (b *Backend) Search(ctx context.Context, q maildomain.SearchQuery) ([]maildomain.MessageSummary, error) {
 	ctx, cancel := context.WithTimeout(ctx, b.cfg.OperationTimeout)

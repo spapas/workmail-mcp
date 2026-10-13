@@ -29,6 +29,7 @@ See [SECURITY.md](SECURITY.md) for the threat model.
 | Tool | Purpose |
 | --- | --- |
 | `mail_list_folders` | List visible IMAP folders |
+| `mail_stats` | Total/unseen counts per folder via IMAP STATUS (counts only) |
 | `mail_search` | Structured full-text/header/date search returning metadata (including IMAP flags, e.g. `\Seen`) |
 | `mail_recent` | Recent message metadata (including IMAP flags) |
 | `mail_get` | One bounded message body plus attachment metadata (including IMAP flags) |
@@ -182,10 +183,11 @@ The examples assume the release binary is named `workmail-mcp-windows-amd64.exe`
 py -3 -c "import subprocess,json; p=subprocess.Popen(['workmail-mcp-windows-amd64.exe','stdio'],stdin=subprocess.PIPE,stdout=subprocess.PIPE); send=lambda x:(p.stdin.write(json.dumps(x,separators=(',',':')).encode()+b'\n'),p.stdin.flush()); send({'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'manual-test','version':'1.0'}}}); print('INIT:',p.stdout.readline().decode().strip()); send({'jsonrpc':'2.0','method':'notifications/initialized','params':{}}); send({'jsonrpc':'2.0','id':2,'method':'tools/list','params':{}}); print('TOOLS:',p.stdout.readline().decode().strip()); p.stdin.close(); p.terminate()"
 ```
 
-A successful response should identify `workmail-mcp` and list these six tools:
+A successful response should identify `workmail-mcp` and list these seven tools:
 
 ```text
 mail_list_folders
+mail_stats
 mail_search
 mail_recent
 mail_get
@@ -288,7 +290,7 @@ It:
 - seeds four known messages, including an attachment and a two-message thread;
 - builds the real `workmail-mcp` binary;
 - verifies `doctor --latest-subject`;
-- drives the real binary over MCP `stdio` and exercises all eleven MCP tools: the six reads plus the full two-phase write flow (flags, move, delete, send with `mail_confirm`).
+- drives the real binary over MCP `stdio` and exercises all twelve MCP tools: the seven reads plus the full two-phase write flow (flags, move, delete, send with `mail_confirm`).
 
 On Linux, or in a Linux environment with Docker, Python 3, OpenSSL, and Go installed, run the same suite with:
 
