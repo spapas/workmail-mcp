@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-04
+
+### Fixed
+
+- `README.md`: manual `tools/list` smoke test now documents all twelve tools
+  (seven reads plus the two-phase write flow) instead of only the seven reads.
+- `docs/ROADMAP.md`: mark OpenCode MCP stdio end-to-end validation on the
+  owner's Windows machine (`mail_list_folders`, `mail_search`, `mail_get`,
+  `mail_stats` against Zimbra); remaining Zimbra items are `mail_recent`,
+  `mail_get_attachment`, and `mail_get_thread`.
+
 ## [0.4.0] - 2026-10-13
 
 ### Added

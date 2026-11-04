@@ -26,7 +26,8 @@
 
 ## Requires the owner's real environment
 
-- [ ] full Zimbra validation for `mail_recent`, `mail_search`, `mail_get`, `mail_get_attachment`, `mail_get_thread`, and `mail_stats`
+- [x] OpenCode MCP stdio end-to-end on the owner's Windows machine (`mail_list_folders`, `mail_search`, `mail_get`, `mail_stats` against Zimbra)
+- [ ] full Zimbra validation for `mail_recent`, `mail_get_attachment`, and `mail_get_thread`
 - [ ] Hermes end-to-end tool invocation on the owner's Windows machine
 - [ ] ChatGPT end-to-end test when the account/workspace supports custom MCP and Secure MCP Tunnel
 

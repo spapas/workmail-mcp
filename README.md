@@ -183,7 +183,8 @@ The examples assume the release binary is named `workmail-mcp-windows-amd64.exe`
 py -3 -c "import subprocess,json; p=subprocess.Popen(['workmail-mcp-windows-amd64.exe','stdio'],stdin=subprocess.PIPE,stdout=subprocess.PIPE); send=lambda x:(p.stdin.write(json.dumps(x,separators=(',',':')).encode()+b'\n'),p.stdin.flush()); send({'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'manual-test','version':'1.0'}}}); print('INIT:',p.stdout.readline().decode().strip()); send({'jsonrpc':'2.0','method':'notifications/initialized','params':{}}); send({'jsonrpc':'2.0','id':2,'method':'tools/list','params':{}}); print('TOOLS:',p.stdout.readline().decode().strip()); p.stdin.close(); p.terminate()"
 ```
 
-A successful response should identify `workmail-mcp` and list these seven tools:
+A successful response should identify `workmail-mcp` and list all twelve tools
+(seven reads plus the two-phase write flow):
 
 ```text
 mail_list_folders
@@ -193,6 +194,11 @@ mail_recent
 mail_get
 mail_get_attachment
 mail_get_thread
+mail_send_request
+mail_move_request
+mail_delete_request
+mail_set_flags_request
+mail_confirm
 ```
 
 ### 2. Call `mail_list_folders` through MCP
