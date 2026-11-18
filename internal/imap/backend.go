@@ -248,6 +248,9 @@ func (b *Backend) GetThread(ctx context.Context, folder string, uid uint32, limi
 			continue
 		}
 		seenID[id] = true
+		if len(id) > b.cfg.MaxQueryLength {
+			continue
+		}
 		var candidates []imapv2.UID
 		for _, key := range []string{"Message-ID", "In-Reply-To", "References"} {
 			data, err := c.UIDSearch(&imapv2.SearchCriteria{Header: []imapv2.SearchCriteriaHeaderField{{Key: key, Value: id}}}, nil).Wait()

@@ -222,6 +222,9 @@ func ValidateLoopbackAddr(addr string) error {
 }
 
 func (c Config) validateLimits() error {
+	if c.IMAPPort < 1 || c.IMAPPort > 65535 {
+		return errors.New("WORKMAIL_IMAP_PORT must be between 1 and 65535")
+	}
 	if c.MaxResults < 1 || c.MaxResults > 500 {
 		return errors.New("WORKMAIL_MAX_RESULTS must be between 1 and 500")
 	}

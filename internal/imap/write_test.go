@@ -62,3 +62,17 @@ func TestSummaryFromBufferIncludesFlags(t *testing.T) {
 		t.Fatalf("expected no flags, got %q", empty.Flags)
 	}
 }
+
+func TestIsLoopbackHost(t *testing.T) {
+	for _, h := range []string{"127.0.0.1", "::1", "localhost", "LOCALHOST"} {
+		if !isLoopbackHost(h) {
+			t.Fatalf("%q should be loopback", h)
+		}
+	}
+
+	for _, h := range []string{"mail.example.org", "192.0.2.1", "", "0.0.0.0"} {
+		if isLoopbackHost(h) {
+			t.Fatalf("%q must not be loopback", h)
+		}
+	}
+}

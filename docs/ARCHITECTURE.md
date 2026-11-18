@@ -26,9 +26,9 @@ OpenAI Secure MCP Tunnel -> localhost HTTP / bearer -+
 ## Trust boundaries
 
 1. **Email content is untrusted.** Message bodies, subjects, headers, and attachments are data and cannot expand server capabilities.
-2. **MCP is not the authorization boundary.** The concrete service exposes only read operations; no write primitive exists underneath the tools.
+2. **MCP is not the authorization boundary.** Human confirmation is: every write runs as `mail_*_request` (freeze) + `mail_confirm` (execute once); no direct write path exists.
 3. **HTTP is local-only.** Configuration validation rejects anything other than loopback IP addresses.
-4. **IMAP is encrypted and verified.** Implicit TLS uses hostname/certificate verification and TLS 1.2 or newer.
+4. **IMAP/SMTP are encrypted and verified.** Implicit TLS uses hostname/certificate verification and TLS 1.2 or newer; SMTP on other ports requires STARTTLS, except loopback test delivery without AUTH.
 5. **Resource usage is bounded.** Search result count, query length, raw message size, body size, attachment size, thread size, and operation duration have configurable hard limits.
 
 ## IMAP lifecycle

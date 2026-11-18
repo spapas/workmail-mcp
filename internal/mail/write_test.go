@@ -28,6 +28,29 @@ func TestValidateSend(t *testing.T) {
 	}
 }
 
+func TestValidateSendRejectsIDInjection(t *testing.T) {
+	// In-Reply-To / References render as raw headers: CRLF must fail.
+	base := SendRequest{To: []string{"a@example.com"}, Subject: "hi", BodyText: "x"}
+
+	withCRLF := base
+	withCRLF.InReplyTo = "<id@example.com>\r\nBcc: evil@example.com"
+	if err := ValidateSend(&withCRLF, 50, 1<<20, 998); err == nil {
+		t.Fatal("expected In-Reply-To injection error")
+	}
+
+	withRef := base
+	withRef.References = []string{"<ok@example.com>", "bad\r\nHeader: x"}
+	if err := ValidateSend(&withRef, 50, 1<<20, 998); err == nil {
+		t.Fatal("expected References injection error")
+	}
+
+	tooLong := base
+	tooLong.InReplyTo = "<" + strings.Repeat("a", 2048) + ">"
+	if err := ValidateSend(&tooLong, 50, 1<<20, 998); err == nil {
+		t.Fatal("expected overlong In-Reply-To error")
+	}
+}
+
 func TestNormalizeFlags(t *testing.T) {
 	add, remove, err := NormalizeFlags([]string{"seen", "\\Flagged"}, []string{"draft"})
 	if err != nil {

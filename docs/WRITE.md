@@ -39,7 +39,8 @@ Rules:
 - Move/delete/flags use IMAPS with a `ReadOnly: false` SELECT, only inside the
   confirm step. Read paths still select `ReadOnly: true`.
 - Send uses SMTP with verified TLS: implicit TLS on port 465, otherwise
-  STARTTLS when offered. TLS 1.2+, hostname verification, no bypass.
+  mandatory STARTTLS. TLS 1.2+, hostname verification, no bypass, except
+  loopback test delivery without AUTH (GreenMail).
 - SMTP identity defaults to the IMAP identity (`WORKMAIL_SMTP_HOST` defaults
   to `WORKMAIL_IMAP_HOST`, credentials and From default likewise) so a typical
   Zimbra setup needs no extra config; explicit `WORKMAIL_SMTP_*` overrides win.

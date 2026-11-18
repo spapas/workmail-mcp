@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestValidateLoopbackAddr(t *testing.T) {
@@ -41,5 +42,24 @@ func TestLoadRejectsAmbiguousSecret(t *testing.T) {
 	t.Setenv("WORKMAIL_API_TOKEN_FILE", "two")
 	if _, err := Load(); err == nil {
 		t.Fatal("expected ambiguous secret error")
+	}
+}
+
+func TestValidateLimitsRejectsBadIMAPPort(t *testing.T) {
+	cfg := Config{
+		IMAPPort:           0,
+		SMTPPort:           465,
+		MaxResults:         50,
+		MaxQueryLength:     512,
+		MaxMessageBytes:    1024,
+		MaxBodyBytes:       1024,
+		MaxAttachmentBytes: 1024,
+		MaxThreadMessages:  50,
+		MaxRecipients:      50,
+		ConfirmTTL:         5 * time.Minute,
+		OperationTimeout:   30 * time.Second,
+	}
+	if err := cfg.validateLimits(); err == nil {
+		t.Fatal("expected IMAP port range error")
 	}
 }

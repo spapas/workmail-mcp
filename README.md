@@ -20,7 +20,7 @@ The project deliberately does **not** implement:
 - arbitrary/raw IMAP commands
 - a public network listener
 
-IMAP is always implicit TLS (`IMAPS`, normally port 993) with normal certificate and hostname verification. SMTP send uses verified TLS (implicit TLS on 465, otherwise STARTTLS when offered). HTTP mode refuses non-loopback bind addresses and requires a bearer token. Email bodies and attachments are treated as untrusted data.
+IMAP is always implicit TLS (`IMAPS`, normally port 993) with normal certificate and hostname verification. SMTP send uses verified TLS (implicit TLS on 465, otherwise mandatory STARTTLS, except loopback test delivery without AUTH). HTTP mode refuses non-loopback bind addresses and requires a bearer token. Email bodies and attachments are treated as untrusted data.
 
 See [SECURITY.md](SECURITY.md) for the threat model.
 
@@ -85,7 +85,7 @@ WORKMAIL_API_TOKEN           OR WORKMAIL_API_TOKEN_FILE
 ```
 
 Sending mail uses SMTP with verified TLS (implicit TLS on 465, otherwise
-STARTTLS when offered). SMTP identity defaults to the IMAP identity, so a
+mandatory STARTTLS, except loopback test delivery without AUTH). SMTP identity defaults to the IMAP identity, so a
 typical Zimbra setup needs no extra variables; overrides when needed:
 
 ```text

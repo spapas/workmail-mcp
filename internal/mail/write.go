@@ -25,6 +25,9 @@ const (
 // \Deleted is intentionally excluded: deletion has its own confirmed flow.
 var AllowedFlags = []string{"\\Seen", "\\Flagged", "\\Answered", "\\Draft"}
 
+// maxIDChars caps In-Reply-To and each References entry (raw header bytes).
+const maxIDChars = 1024
+
 // SendRequest is a bounded request to send one email message.
 type SendRequest struct {
 	To         []string
@@ -166,12 +169,43 @@ func ValidateSend(req *SendRequest, maxRecipients int, maxBodyBytes int64, maxSu
 	if len([]rune(req.Subject)) > maxSubjectRunes {
 		return fmt.Errorf("subject exceeds %d characters", maxSubjectRunes)
 	}
+	if err := checkMsgIDs(req.InReplyTo, req.References); err != nil {
+		return err
+	}
 	if int64(len(req.BodyText)+len(req.BodyHTML)) > maxBodyBytes {
 		return fmt.Errorf("body exceeds limit %d", maxBodyBytes)
 	}
 	if strings.TrimSpace(req.BodyText) == "" && strings.TrimSpace(req.BodyHTML) == "" {
 		return errors.New("body_text or body_html is required")
 	}
+	return nil
+}
+
+// checkMsgIDs rejects header injection via In-Reply-To/References.
+// IDs render as raw headers, so CRLF is forbidden and length is bounded.
+func checkMsgIDs(reply string, refs []string) error {
+	if strings.ContainsAny(reply, "\x00\r\n") {
+		return errors.New("in_reply_to contains invalid control characters")
+	}
+
+	if len([]rune(reply)) > maxIDChars {
+		return fmt.Errorf("in_reply_to exceeds %d characters", maxIDChars)
+	}
+
+	if len(refs) > maxIDChars {
+		return fmt.Errorf("too many references (limit %d)", maxIDChars)
+	}
+
+	for _, r := range refs {
+		if strings.ContainsAny(r, "\x00\r\n") {
+			return errors.New("references contains invalid control characters")
+		}
+
+		if len([]rune(r)) > maxIDChars {
+			return fmt.Errorf("reference exceeds %d characters", maxIDChars)
+		}
+	}
+
 	return nil
 }
 

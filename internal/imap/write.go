@@ -178,14 +178,16 @@ func storeAdd(c *imapclient.Client, set imapv2.UIDSet, flags []imapv2.Flag) erro
 }
 
 func expungeUID(c *imapclient.Client, set imapv2.UIDSet) error {
-	if supports(c, imapv2.CapUIDPlus) {
-		if err := c.UIDExpunge(set).Close(); err == nil {
-			return nil
-		}
+	// Fail closed: global Expunge would delete unrelated \Deleted messages.
+	// UIDPLUS is widespread (Zimbra, GreenMail); otherwise abort safely.
+	if !supports(c, imapv2.CapUIDPlus) {
+		return fmt.Errorf("expunge requires UIDPLUS support")
 	}
-	if err := c.Expunge().Close(); err != nil {
-		return fmt.Errorf("expunge: %w", err)
+
+	if err := c.UIDExpunge(set).Close(); err != nil {
+		return fmt.Errorf("uid expunge: %w", err)
 	}
+
 	return nil
 }
 
@@ -203,6 +205,21 @@ func toIMAPFlags(in []string) []imapv2.Flag {
 		out = append(out, imapv2.Flag(f))
 	}
 	return out
+}
+
+// isLoopbackHost reports loopback SMTP hosts allowed for plaintext test delivery.
+func isLoopbackHost(host string) bool {
+	if strings.EqualFold(strings.TrimSpace(host), "localhost") {
+		return true
+	}
+
+	trimmed := strings.Trim(strings.TrimSpace(host), "[]")
+	ip := net.ParseIP(trimmed)
+	if ip == nil {
+		return false
+	}
+
+	return ip.IsLoopback()
 }
 
 // buildSendBytes renders a bounded RFC 5322 message. Bodies are trusted here
@@ -282,13 +299,15 @@ func newBoundary() string {
 }
 
 // sendSMTP delivers raw bytes over TLS-verified SMTP (implicit TLS on 465,
-// otherwise STARTTLS when offered). Authentication uses PLAIN when available.
+// otherwise mandatory STARTTLS, except loopback test delivery without AUTH).
+// Authentication uses PLAIN when available.
 func sendSMTP(ctx context.Context, host string, port int, username, password, from string, timeout time.Duration, raw []byte, req maildomain.SendRequest) error {
 	addr := net.JoinHostPort(host, fmt.Sprintf("%d", port))
 	dialer := &net.Dialer{Timeout: timeout}
 	var conn net.Conn
 	var err error
-	if port == 465 {
+	usingTLS := port == 465
+	if usingTLS {
 		tlsCfg := &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}
 		tlsDialer := &tls.Dialer{NetDialer: dialer, Config: tlsCfg}
 		conn, err = tlsDialer.DialContext(ctx, "tcp", addr)
@@ -303,19 +322,36 @@ func sendSMTP(ctx context.Context, host string, port int, username, password, fr
 		return fmt.Errorf("SMTP handshake: %w", err)
 	}
 	defer func() { _ = client.Quit() }()
-	if port != 465 {
+	if !usingTLS {
 		if ok, _ := client.Extension("STARTTLS"); ok {
 			tlsCfg := &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}
 			if err := client.StartTLS(tlsCfg); err != nil {
 				return fmt.Errorf("SMTP STARTTLS: %w", err)
 			}
+
+			usingTLS = true
 		}
 	}
+
+	authOffered, _ := client.Extension("AUTH")
+	if !usingTLS {
+		// Fail closed against STRIPTLS: production hosts must negotiate TLS.
+		// Loopback without AUTH stays available for the disposable GreenMail
+		// test listener; loopback with AUTH still requires TLS for credentials.
+		if !isLoopbackHost(host) {
+			return fmt.Errorf("SMTP requires verified TLS (STARTTLS unavailable)")
+		}
+
+		if authOffered {
+			return fmt.Errorf("SMTP requires verified TLS before AUTH")
+		}
+	}
+
 	// Authenticate only when the server offers AUTH (production Zimbra always
 	// does). Test SMTP listeners without AUTH still accept local delivery, and
 	// a relay-denying server fails later at RCPT with a clear error.
 	if username != "" {
-		if ok, _ := client.Extension("AUTH"); ok {
+		if authOffered {
 			auth := smtp.PlainAuth("", username, password, host)
 			if err := client.Auth(auth); err != nil {
 				return fmt.Errorf("SMTP auth: %w", err)

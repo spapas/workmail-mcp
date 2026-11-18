@@ -59,3 +59,15 @@ func TestParseRawBodyLimit(t *testing.T) {
 		t.Fatalf("unexpected bounded body: %q truncated=%v", parsed.Text, parsed.Truncated)
 	}
 }
+
+func TestAppendBoundedKeepsUTF8(t *testing.T) {
+	// Two-byte rune cut by a byte limit must not split UTF-8.
+	truncated := false
+	got := appendBounded("", "αβ", 1, &truncated)
+	if !truncated {
+		t.Fatal("expected truncated=true")
+	}
+	if got != "" {
+		t.Fatalf("split rune must yield empty prefix, got %q", got)
+	}
+}

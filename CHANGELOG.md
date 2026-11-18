@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-19
+
+### Fixed
+
+- `ValidateSend`: reject header injection via `In-Reply-To`/`References`
+  (control characters rejected, length bounded).
+- SMTP: require verified TLS (implicit TLS on 465, else mandatory
+  STARTTLS); plaintext kept only for loopback test delivery without
+  AUTH. Closes STRIPTLS fallback.
+- Expunge: require UIDPLUS (`UIDExpunge` only); drop global `Expunge`
+  fallback that could delete unrelated `\Deleted` messages.
+- `GetThread`: skip mailbox-derived IDs exceeding `MaxQueryLength`.
+- MIME: rune-aligned body truncation (no split UTF-8).
+- Config: `validateLimits` rejects bad `WORKMAIL_IMAP_PORT`.
+- Docs: fix stale read-only claim in `ARCHITECTURE.md`; clarify SMTP
+  TLS in `README.md` and `docs/WRITE.md`.
+
 ## [0.4.1] - 2026-11-04
 
 ### Fixed

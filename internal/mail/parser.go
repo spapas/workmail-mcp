@@ -6,6 +6,7 @@ import (
 	"io"
 	"mime"
 	"strings"
+	"unicode/utf8"
 
 	_ "github.com/emersion/go-message/charset"
 	msgmail "github.com/emersion/go-message/mail"
@@ -125,9 +126,23 @@ func appendBounded(dst, src string, limit int64, truncated *bool) string {
 	}
 	if int64(len(src)) > remaining {
 		*truncated = true
-		return dst + src[:remaining]
+		return dst + cutBytes(src, remaining)
 	}
 	return dst + src
+}
+
+// cutBytes returns the longest rune-aligned prefix within n bytes.
+func cutBytes(s string, n int64) string {
+	if int64(len(s)) <= n {
+		return s
+	}
+
+	cut := int(n)
+	for cut > 0 && !utf8.ValidString(s[:cut]) {
+		cut--
+	}
+
+	return s[:cut]
 }
 
 // AttachmentMetadata returns attachment descriptions without payload bytes.
