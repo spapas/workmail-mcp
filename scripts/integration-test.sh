@@ -75,9 +75,10 @@ docker pull "$IMAGE" >/dev/null
 docker run -d \
   --name "$CONTAINER" \
   -p 3025:3025 \
+  -p 465:3465 \
   -p 3993:3993 \
   -v "$TMP/greenmail.p12:/home/greenmail/greenmail.p12:ro" \
-  -e 'GREENMAIL_OPTS=-Dgreenmail.setup.test.smtp -Dgreenmail.setup.test.imaps -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.tls.keystore.file=/home/greenmail/greenmail.p12 -Dgreenmail.tls.keystore.password=changeit -Dgreenmail.tls.key.password=changeit -Dgreenmail.users=integration:integration-secret@localhost -Dgreenmail.startup.timeout=5000' \
+  -e 'GREENMAIL_OPTS=-Dgreenmail.setup.test.smtp -Dgreenmail.setup.test.smtps -Dgreenmail.setup.test.imaps -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.tls.keystore.file=/home/greenmail/greenmail.p12 -Dgreenmail.tls.keystore.password=changeit -Dgreenmail.tls.key.password=changeit -Dgreenmail.users=integration:integration-secret@localhost -Dgreenmail.startup.timeout=5000' \
   "$IMAGE" >/dev/null
 
 if ! python3 - "$TMP/ca.crt" <<'PY'
@@ -113,6 +114,19 @@ for _ in range(60):
         time.sleep(0.5)
 else:
     raise SystemExit("GreenMail IMAPS did not become ready with trusted TLS")
+
+for _ in range(60):
+    try:
+        with socket.create_connection(("127.0.0.1", 465), timeout=1) as raw:
+            with context.wrap_socket(raw, server_hostname="localhost") as tls:
+                banner = tls.recv(512)
+                if not banner.startswith(b"220"):
+                    raise OSError(f"unexpected SMTPS banner: {banner!r}")
+        break
+    except (OSError, ssl.SSLError):
+        time.sleep(0.5)
+else:
+    raise SystemExit("GreenMail SMTPS did not become ready with trusted TLS")
 PY
 then
   echo "GreenMail failed readiness checks" >&2
@@ -132,10 +146,10 @@ export WORKMAIL_IMAP_PASSWORD=integration-secret
 export WORKMAIL_DEFAULT_FOLDER=INBOX
 export WORKMAIL_OPERATION_TIMEOUT=10s
 export SSL_CERT_FILE="$TMP/ca.crt"
-# Write-flow SMTP against GreenMail's plaintext test listener. HOST/credentials
-# default to the IMAP identity; only the port and a valid From address differ.
-# (Local plaintext SMTP here is test-only; production SMTP is verified TLS.)
-export WORKMAIL_SMTP_PORT=3025
+# Write-flow SMTP via GreenMail SMTPS (container 3465 mapped to host 465,
+# the implicit-TLS port). HOST/credentials default to the IMAP identity;
+# only a valid From address differs. Verified TLS end to end, like prod.
+export WORKMAIL_SMTP_PORT=465
 export WORKMAIL_SMTP_FROM=integration@localhost
 
 doctor_output="$($BIN doctor --latest-subject)"
