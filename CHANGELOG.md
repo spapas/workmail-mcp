@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-11-19
+
+### Changed
+
+- Update `go-imap/v2` to `v2.0.0-beta.9`: IMAP client robustness
+  fixes (COPYUID connection handling, unsolicited LIST, error
+  wrapping) plus NOTIFY and RFC 9979 flags support. No API change
+  for our use.
+
 ## [0.4.2] - 2026-11-19
 
 ### Fixed
