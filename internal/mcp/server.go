@@ -85,7 +85,8 @@ type recentInput struct {
 
 type getInput struct {
 	Folder string `json:"folder,omitempty" jsonschema:"IMAP folder; defaults to configured folder"`
-	UID    uint32 `json:"uid" jsonschema:"IMAP UID of the message"`
+	UID    uint32 `json:"uid,omitempty" jsonschema:"IMAP UID of the message"`
+	ID     string `json:"id,omitempty" jsonschema:"JMAP Email id; use instead of uid on the jmap backend"`
 }
 
 type messageOutput struct {
@@ -94,8 +95,9 @@ type messageOutput struct {
 
 type attachmentInput struct {
 	Folder string `json:"folder,omitempty" jsonschema:"IMAP folder; defaults to configured folder"`
-	UID    uint32 `json:"uid" jsonschema:"IMAP UID of the message"`
+	UID    uint32 `json:"uid,omitempty" jsonschema:"IMAP UID of the message"`
 	Index  int    `json:"attachment_index" jsonschema:"zero-based attachment index returned by mail_get"`
+	ID     string `json:"id,omitempty" jsonschema:"JMAP Email id; use instead of uid on the jmap backend"`
 }
 
 type attachmentOutput struct {
@@ -104,8 +106,9 @@ type attachmentOutput struct {
 
 type threadInput struct {
 	Folder string `json:"folder,omitempty" jsonschema:"IMAP folder; defaults to configured folder"`
-	UID    uint32 `json:"uid" jsonschema:"IMAP UID of any message in the thread"`
+	UID    uint32 `json:"uid,omitempty" jsonschema:"IMAP UID of any message in the thread"`
 	Limit  int    `json:"limit,omitempty" jsonschema:"maximum number of thread messages"`
+	ID     string `json:"id,omitempty" jsonschema:"JMAP Email id; use instead of uid on the jmap backend"`
 }
 
 func (t toolSet) listFolders(ctx context.Context, _ *mcpsdk.CallToolRequest, _ emptyInput) (*mcpsdk.CallToolResult, foldersOutput, error) {
@@ -157,36 +160,36 @@ func (t toolSet) recent(ctx context.Context, _ *mcpsdk.CallToolRequest, in recen
 
 func (t toolSet) getMessage(ctx context.Context, _ *mcpsdk.CallToolRequest, in getInput) (*mcpsdk.CallToolResult, messageOutput, error) {
 	start := time.Now()
-	if in.UID == 0 {
-		err := fmt.Errorf("uid must be greater than zero")
+	ref, err := maildomain.NormalizeRef(in.Folder, t.cfg.DefaultFolder, in.UID, in.ID)
+	if err != nil {
 		t.audit("mail_get", start, err)
 		return nil, messageOutput{}, err
 	}
-	msg, err := t.service.GetMessage(ctx, in.Folder, in.UID)
+	msg, err := t.service.GetMessage(ctx, ref)
 	t.audit("mail_get", start, err)
 	return nil, messageOutput{Message: msg}, err
 }
 
 func (t toolSet) getAttachment(ctx context.Context, _ *mcpsdk.CallToolRequest, in attachmentInput) (*mcpsdk.CallToolResult, attachmentOutput, error) {
 	start := time.Now()
-	if in.UID == 0 {
-		err := fmt.Errorf("uid must be greater than zero")
+	ref, err := maildomain.NormalizeRef(in.Folder, t.cfg.DefaultFolder, in.UID, in.ID)
+	if err != nil {
 		t.audit("mail_get_attachment", start, err)
 		return nil, attachmentOutput{}, err
 	}
-	att, err := t.service.GetAttachment(ctx, in.Folder, in.UID, in.Index)
+	att, err := t.service.GetAttachment(ctx, ref, in.Index)
 	t.audit("mail_get_attachment", start, err)
 	return nil, attachmentOutput{Attachment: att}, err
 }
 
 func (t toolSet) getThread(ctx context.Context, _ *mcpsdk.CallToolRequest, in threadInput) (*mcpsdk.CallToolResult, messagesOutput, error) {
 	start := time.Now()
-	if in.UID == 0 {
-		err := fmt.Errorf("uid must be greater than zero")
+	ref, err := maildomain.NormalizeRef(in.Folder, t.cfg.DefaultFolder, in.UID, in.ID)
+	if err != nil {
 		t.audit("mail_get_thread", start, err)
 		return nil, messagesOutput{}, err
 	}
-	msgs, err := t.service.GetThread(ctx, in.Folder, in.UID, in.Limit)
+	msgs, err := t.service.GetThread(ctx, ref, in.Limit)
 	t.audit("mail_get_thread", start, err)
 	return nil, messagesOutput{Messages: msgs}, err
 }

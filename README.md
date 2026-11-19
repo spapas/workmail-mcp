@@ -68,6 +68,27 @@ Renaming the downloaded binary is fine.
 
 Configuration is environment-only; the program intentionally does **not** auto-load `.env` files. Secrets can be supplied directly or, preferably, from local files.
 
+Backend selection (default `imap`):
+
+```text
+WORKMAIL_BACKEND=imap
+```
+
+JMAP backend instead of IMAP (for example Stalwart). Identity
+defaults to the IMAP identity, so only the URL is required:
+
+```text
+WORKMAIL_BACKEND=jmap
+WORKMAIL_JMAP_URL                 (for example http://127.0.0.1:8080)
+WORKMAIL_JMAP_USERNAME            (default: WORKMAIL_IMAP_USERNAME)
+WORKMAIL_JMAP_PASSWORD        OR WORKMAIL_JMAP_PASSWORD_FILE  (default: IMAP password)
+WORKMAIL_JMAP_ACCOUNT             (default: primary mail account)
+```
+
+`WORKMAIL_JMAP_URL` `https` is verified TLS; plain `http` is
+allowed only for loopback hosts. Message identity on the JMAP
+backend is the server-issued `id` used in place of `uid`.
+
 Required for IMAP operations:
 
 ```text

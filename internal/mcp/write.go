@@ -27,20 +27,23 @@ type sendRequestInput struct {
 
 type moveRequestInput struct {
 	Folder string `json:"folder,omitempty" jsonschema:"IMAP folder; defaults to configured folder"`
-	UID    uint32 `json:"uid" jsonschema:"IMAP UID of the message"`
+	UID    uint32 `json:"uid,omitempty" jsonschema:"IMAP UID of the message"`
 	Dest   string `json:"dest" jsonschema:"destination folder (must already exist)"`
+	ID     string `json:"id,omitempty" jsonschema:"JMAP Email id; use instead of uid on the jmap backend"`
 }
 
 type deleteRequestInput struct {
 	Folder string `json:"folder,omitempty" jsonschema:"IMAP folder; defaults to configured folder"`
-	UID    uint32 `json:"uid" jsonschema:"IMAP UID of the message to permanently delete"`
+	UID    uint32 `json:"uid,omitempty" jsonschema:"IMAP UID of the message to permanently delete"`
+	ID     string `json:"id,omitempty" jsonschema:"JMAP Email id; use instead of uid on the jmap backend"`
 }
 
 type setFlagsRequestInput struct {
 	Folder string   `json:"folder,omitempty" jsonschema:"IMAP folder; defaults to configured folder"`
-	UID    uint32   `json:"uid" jsonschema:"IMAP UID of the message"`
+	UID    uint32   `json:"uid,omitempty" jsonschema:"IMAP UID of the message"`
 	Add    []string `json:"add,omitempty" jsonschema:"flags to add: Seen, Flagged, Answered, Draft"`
 	Remove []string `json:"remove,omitempty" jsonschema:"flags to remove: Seen, Flagged, Answered, Draft"`
+	ID     string   `json:"id,omitempty" jsonschema:"JMAP Email id; use instead of uid on the jmap backend"`
 }
 
 type confirmInput struct {
@@ -90,12 +93,8 @@ func (t toolSet) sendRequest(_ context.Context, _ *mcpsdk.CallToolRequest, in se
 
 func (t toolSet) moveRequest(_ context.Context, _ *mcpsdk.CallToolRequest, in moveRequestInput) (*mcpsdk.CallToolResult, pendingOutput, error) {
 	start := time.Now()
-	folder, err := maildomain.NormalizeFolder(in.Folder, t.cfg.DefaultFolder)
+	ref, err := maildomain.NormalizeRef(in.Folder, t.cfg.DefaultFolder, in.UID, in.ID)
 	if err != nil {
-		t.audit("mail_move_request", start, err)
-		return nil, pendingOutput{}, err
-	}
-	if err := maildomain.ValidateUID(in.UID); err != nil {
 		t.audit("mail_move_request", start, err)
 		return nil, pendingOutput{}, err
 	}
@@ -105,13 +104,13 @@ func (t toolSet) moveRequest(_ context.Context, _ *mcpsdk.CallToolRequest, in mo
 		t.audit("mail_move_request", start, err)
 		return nil, pendingOutput{}, err
 	}
-	if strings.EqualFold(folder, dest) {
+	if strings.EqualFold(ref.Folder, dest) {
 		err := fmt.Errorf("source and destination folders are the same")
 		t.audit("mail_move_request", start, err)
 		return nil, pendingOutput{}, err
 	}
-	frozen := maildomain.MoveRequest{Folder: folder, UID: in.UID, Dest: dest}
-	summary := fmt.Sprintf("move UID %d from %q to %q", frozen.UID, frozen.Folder, frozen.Dest)
+	frozen := maildomain.MoveRequest{Target: ref, Dest: dest}
+	summary := fmt.Sprintf("move %s from %q to %q", refLabel(ref), ref.Folder, frozen.Dest)
 	id, expiresAt, err := t.pending.create(pendingPayload{Kind: maildomain.PendingKindMove, Summary: summary, Move: &frozen})
 	if err != nil {
 		t.audit("mail_move_request", start, err)
@@ -123,17 +122,13 @@ func (t toolSet) moveRequest(_ context.Context, _ *mcpsdk.CallToolRequest, in mo
 
 func (t toolSet) deleteRequest(_ context.Context, _ *mcpsdk.CallToolRequest, in deleteRequestInput) (*mcpsdk.CallToolResult, pendingOutput, error) {
 	start := time.Now()
-	folder, err := maildomain.NormalizeFolder(in.Folder, t.cfg.DefaultFolder)
+	ref, err := maildomain.NormalizeRef(in.Folder, t.cfg.DefaultFolder, in.UID, in.ID)
 	if err != nil {
 		t.audit("mail_delete_request", start, err)
 		return nil, pendingOutput{}, err
 	}
-	if err := maildomain.ValidateUID(in.UID); err != nil {
-		t.audit("mail_delete_request", start, err)
-		return nil, pendingOutput{}, err
-	}
-	frozen := maildomain.DeleteRequest{Folder: folder, UID: in.UID}
-	summary := fmt.Sprintf("permanently delete UID %d from %q", frozen.UID, frozen.Folder)
+	frozen := maildomain.DeleteRequest{Target: ref}
+	summary := fmt.Sprintf("permanently delete %s from %q", refLabel(ref), ref.Folder)
 	id, expiresAt, err := t.pending.create(pendingPayload{Kind: maildomain.PendingKindDelete, Summary: summary, Delete: &frozen})
 	if err != nil {
 		t.audit("mail_delete_request", start, err)
@@ -145,12 +140,8 @@ func (t toolSet) deleteRequest(_ context.Context, _ *mcpsdk.CallToolRequest, in 
 
 func (t toolSet) setFlagsRequest(_ context.Context, _ *mcpsdk.CallToolRequest, in setFlagsRequestInput) (*mcpsdk.CallToolResult, pendingOutput, error) {
 	start := time.Now()
-	folder, err := maildomain.NormalizeFolder(in.Folder, t.cfg.DefaultFolder)
+	ref, err := maildomain.NormalizeRef(in.Folder, t.cfg.DefaultFolder, in.UID, in.ID)
 	if err != nil {
-		t.audit("mail_set_flags_request", start, err)
-		return nil, pendingOutput{}, err
-	}
-	if err := maildomain.ValidateUID(in.UID); err != nil {
 		t.audit("mail_set_flags_request", start, err)
 		return nil, pendingOutput{}, err
 	}
@@ -159,8 +150,8 @@ func (t toolSet) setFlagsRequest(_ context.Context, _ *mcpsdk.CallToolRequest, i
 		t.audit("mail_set_flags_request", start, err)
 		return nil, pendingOutput{}, err
 	}
-	frozen := maildomain.FlagsRequest{Folder: folder, UID: in.UID, Add: add, Remove: remove}
-	summary := fmt.Sprintf("update flags on UID %d in %q (add %v, remove %v)", frozen.UID, frozen.Folder, add, remove)
+	frozen := maildomain.FlagsRequest{Target: ref, Add: add, Remove: remove}
+	summary := fmt.Sprintf("update flags on %s in %q (add %v, remove %v)", refLabel(ref), ref.Folder, add, remove)
 	id, expiresAt, err := t.pending.create(pendingPayload{Kind: maildomain.PendingKindSetFlag, Summary: summary, Flags: &frozen})
 	if err != nil {
 		t.audit("mail_set_flags_request", start, err)
@@ -246,4 +237,13 @@ func truncateRunes(s string, n int) string {
 		return string(r[:n]) + "..."
 	}
 	return s
+}
+
+// refLabel renders a message reference for human-readable summaries.
+func refLabel(ref maildomain.Ref) string {
+	if ref.ID != "" {
+		return fmt.Sprintf("ID %s", ref.ID)
+	}
+
+	return fmt.Sprintf("UID %d", ref.UID)
 }

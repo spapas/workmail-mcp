@@ -51,8 +51,7 @@ type SendReceipt struct {
 
 // MoveRequest moves one message to another existing folder.
 type MoveRequest struct {
-	Folder string
-	UID    uint32
+	Target Ref
 	Dest   string
 }
 
@@ -62,12 +61,12 @@ type MoveResult struct {
 	UID    uint32 `json:"uid"`
 	Dest   string `json:"dest"`
 	Moved  bool   `json:"moved"`
+	ID     string `json:"id,omitempty"`
 }
 
 // DeleteRequest permanently deletes one message (STORE \Deleted + expunge).
 type DeleteRequest struct {
-	Folder string
-	UID    uint32
+	Target Ref
 }
 
 // DeleteResult is the result of an executed delete.
@@ -75,12 +74,12 @@ type DeleteResult struct {
 	Folder  string `json:"folder"`
 	UID     uint32 `json:"uid"`
 	Deleted bool   `json:"deleted"`
+	ID      string `json:"id,omitempty"`
 }
 
 // FlagsRequest adds and/or removes IMAP flags on one message.
 type FlagsRequest struct {
-	Folder string
-	UID    uint32
+	Target Ref
 	Add    []string
 	Remove []string
 }
@@ -91,6 +90,7 @@ type FlagsResult struct {
 	UID     uint32   `json:"uid"`
 	Added   []string `json:"added,omitempty"`
 	Removed []string `json:"removed,omitempty"`
+	ID      string   `json:"id,omitempty"`
 }
 
 // WriteService is the write capability surface. Every method executes an

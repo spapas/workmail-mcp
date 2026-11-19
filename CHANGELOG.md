@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- JMAP backend (`WORKMAIL_BACKEND=jmap`) behind the existing
+  `mail.Service`/`mail.WriteService` interfaces: all seven reads
+  plus the full two-phase write flow against JMAP (verified live
+  against Stalwart). Message identity is the server-issued `id`
+  used in place of `uid`; `uid` tool inputs are now optional.
+
 ## [0.4.3] - 2026-11-19
 
 ### Changed

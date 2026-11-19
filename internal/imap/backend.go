@@ -141,10 +141,13 @@ func (b *Backend) Search(ctx context.Context, q maildomain.SearchQuery) ([]maild
 }
 
 // GetMessage fetches one whole RFC 822 message after a server-reported size check.
-func (b *Backend) GetMessage(ctx context.Context, folder string, uid uint32) (maildomain.Message, error) {
+func (b *Backend) GetMessage(ctx context.Context, ref maildomain.Ref) (maildomain.Message, error) {
 	ctx, cancel := context.WithTimeout(ctx, b.cfg.OperationTimeout)
 	defer cancel()
-	folder, err := b.normalizeFolder(folder)
+	if ref.ID != "" {
+		return maildomain.Message{}, errors.New("id lookup requires the jmap backend; use uid")
+	}
+	folder, err := b.normalizeFolder(ref.Folder)
 	if err != nil {
 		return maildomain.Message{}, err
 	}
@@ -154,7 +157,7 @@ func (b *Backend) GetMessage(ctx context.Context, folder string, uid uint32) (ma
 	}
 	defer cleanup()
 
-	summary, raw, err := b.fetchRaw(c, folder, imapv2.UID(uid))
+	summary, raw, err := b.fetchRaw(c, folder, imapv2.UID(ref.UID))
 	if err != nil {
 		return maildomain.Message{}, err
 	}
@@ -173,13 +176,16 @@ func (b *Backend) GetMessage(ctx context.Context, folder string, uid uint32) (ma
 }
 
 // GetAttachment returns one attachment by zero-based attachment index.
-func (b *Backend) GetAttachment(ctx context.Context, folder string, uid uint32, index int) (maildomain.Attachment, error) {
+func (b *Backend) GetAttachment(ctx context.Context, ref maildomain.Ref, index int) (maildomain.Attachment, error) {
 	ctx, cancel := context.WithTimeout(ctx, b.cfg.OperationTimeout)
 	defer cancel()
+	if ref.ID != "" {
+		return maildomain.Attachment{}, errors.New("id lookup requires the jmap backend; use uid")
+	}
 	if index < 0 {
 		return maildomain.Attachment{}, errors.New("attachment index must be non-negative")
 	}
-	folder, err := b.normalizeFolder(folder)
+	folder, err := b.normalizeFolder(ref.Folder)
 	if err != nil {
 		return maildomain.Attachment{}, err
 	}
@@ -188,7 +194,7 @@ func (b *Backend) GetAttachment(ctx context.Context, folder string, uid uint32, 
 		return maildomain.Attachment{}, err
 	}
 	defer cleanup()
-	_, raw, err := b.fetchRaw(c, folder, imapv2.UID(uid))
+	_, raw, err := b.fetchRaw(c, folder, imapv2.UID(ref.UID))
 	if err != nil {
 		return maildomain.Attachment{}, err
 	}
@@ -207,10 +213,13 @@ func (b *Backend) GetAttachment(ctx context.Context, folder string, uid uint32, 
 }
 
 // GetThread reconstructs a bounded thread using Message-ID/In-Reply-To/References headers.
-func (b *Backend) GetThread(ctx context.Context, folder string, uid uint32, limit int) ([]maildomain.MessageSummary, error) {
+func (b *Backend) GetThread(ctx context.Context, ref maildomain.Ref, limit int) ([]maildomain.MessageSummary, error) {
 	ctx, cancel := context.WithTimeout(ctx, b.cfg.OperationTimeout)
 	defer cancel()
-	folder, err := b.normalizeFolder(folder)
+	if ref.ID != "" {
+		return nil, errors.New("id lookup requires the jmap backend; use uid")
+	}
+	folder, err := b.normalizeFolder(ref.Folder)
 	if err != nil {
 		return nil, err
 	}
@@ -226,15 +235,15 @@ func (b *Backend) GetThread(ctx context.Context, folder string, uid uint32, limi
 	}
 	defer cleanup()
 
-	initial, err := b.fetchSummaries(c, folder, []imapv2.UID{imapv2.UID(uid)})
+	initial, err := b.fetchSummaries(c, folder, []imapv2.UID{imapv2.UID(ref.UID)})
 	if err != nil || len(initial) == 0 {
 		if err == nil {
-			err = fmt.Errorf("message UID %d not found", uid)
+			err = fmt.Errorf("message UID %d not found", ref.UID)
 		}
 		return nil, err
 	}
 	result := []maildomain.MessageSummary{initial[0]}
-	seenUID := map[uint32]bool{uid: true}
+	seenUID := map[uint32]bool{ref.UID: true}
 	seenID := map[string]bool{}
 	queue := append([]string{}, initial[0].InReplyTo...)
 	if initial[0].MessageID != "" {

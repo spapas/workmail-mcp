@@ -48,15 +48,15 @@ func (s *stubService) Search(context.Context, maildomain.SearchQuery) ([]maildom
 	return nil, nil
 }
 
-func (s *stubService) GetMessage(context.Context, string, uint32) (maildomain.Message, error) {
+func (s *stubService) GetMessage(context.Context, maildomain.Ref) (maildomain.Message, error) {
 	return maildomain.Message{}, nil
 }
 
-func (s *stubService) GetAttachment(context.Context, string, uint32, int) (maildomain.Attachment, error) {
+func (s *stubService) GetAttachment(context.Context, maildomain.Ref, int) (maildomain.Attachment, error) {
 	return maildomain.Attachment{}, nil
 }
 
-func (s *stubService) GetThread(context.Context, string, uint32, int) ([]maildomain.MessageSummary, error) {
+func (s *stubService) GetThread(context.Context, maildomain.Ref, int) ([]maildomain.MessageSummary, error) {
 	return nil, nil
 }
 

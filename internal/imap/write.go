@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"mime"
 	"net"
@@ -55,7 +56,10 @@ func (b *Backend) SendMessage(ctx context.Context, req maildomain.SendRequest) (
 func (b *Backend) MoveMessage(ctx context.Context, req maildomain.MoveRequest) (maildomain.MoveResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, b.cfg.OperationTimeout)
 	defer cancel()
-	folder, err := b.normalizeFolder(req.Folder)
+	if req.Target.ID != "" {
+		return maildomain.MoveResult{}, errors.New("id lookup requires the jmap backend; use uid")
+	}
+	folder, err := b.normalizeFolder(req.Target.Folder)
 	if err != nil {
 		return maildomain.MoveResult{}, err
 	}
@@ -66,7 +70,7 @@ func (b *Backend) MoveMessage(ctx context.Context, req maildomain.MoveRequest) (
 	if strings.EqualFold(folder, dest) {
 		return maildomain.MoveResult{}, fmt.Errorf("source and destination folders are the same")
 	}
-	if err := maildomain.ValidateUID(req.UID); err != nil {
+	if err := maildomain.ValidateUID(req.Target.UID); err != nil {
 		return maildomain.MoveResult{}, err
 	}
 	c, cleanup, err := b.connectSelectedWrite(ctx, folder)
@@ -75,12 +79,12 @@ func (b *Backend) MoveMessage(ctx context.Context, req maildomain.MoveRequest) (
 	}
 	defer cleanup()
 
-	set := imapv2.UIDSetNum(imapv2.UID(req.UID))
+	set := imapv2.UIDSetNum(imapv2.UID(req.Target.UID))
 	if supports(c, imapv2.CapMove) {
 		if _, err := c.Move(set, dest).Wait(); err != nil {
 			return maildomain.MoveResult{}, fmt.Errorf("move message: %w", err)
 		}
-		return maildomain.MoveResult{Folder: folder, UID: req.UID, Dest: dest, Moved: true}, nil
+		return maildomain.MoveResult{Folder: folder, UID: req.Target.UID, Dest: dest, Moved: true}, nil
 	}
 	if _, err := c.Copy(set, dest).Wait(); err != nil {
 		return maildomain.MoveResult{}, fmt.Errorf("copy for move: %w", err)
@@ -91,18 +95,21 @@ func (b *Backend) MoveMessage(ctx context.Context, req maildomain.MoveRequest) (
 	if err := expungeUID(c, set); err != nil {
 		return maildomain.MoveResult{}, err
 	}
-	return maildomain.MoveResult{Folder: folder, UID: req.UID, Dest: dest, Moved: true}, nil
+	return maildomain.MoveResult{Folder: folder, UID: req.Target.UID, Dest: dest, Moved: true}, nil
 }
 
 // DeleteMessage permanently deletes one message via STORE \Deleted + expunge.
 func (b *Backend) DeleteMessage(ctx context.Context, req maildomain.DeleteRequest) (maildomain.DeleteResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, b.cfg.OperationTimeout)
 	defer cancel()
-	folder, err := b.normalizeFolder(req.Folder)
+	if req.Target.ID != "" {
+		return maildomain.DeleteResult{}, errors.New("id lookup requires the jmap backend; use uid")
+	}
+	folder, err := b.normalizeFolder(req.Target.Folder)
 	if err != nil {
 		return maildomain.DeleteResult{}, err
 	}
-	if err := maildomain.ValidateUID(req.UID); err != nil {
+	if err := maildomain.ValidateUID(req.Target.UID); err != nil {
 		return maildomain.DeleteResult{}, err
 	}
 	c, cleanup, err := b.connectSelectedWrite(ctx, folder)
@@ -111,25 +118,28 @@ func (b *Backend) DeleteMessage(ctx context.Context, req maildomain.DeleteReques
 	}
 	defer cleanup()
 
-	set := imapv2.UIDSetNum(imapv2.UID(req.UID))
+	set := imapv2.UIDSetNum(imapv2.UID(req.Target.UID))
 	if err := storeAdd(c, set, []imapv2.Flag{imapv2.FlagDeleted}); err != nil {
 		return maildomain.DeleteResult{}, err
 	}
 	if err := expungeUID(c, set); err != nil {
 		return maildomain.DeleteResult{}, err
 	}
-	return maildomain.DeleteResult{Folder: folder, UID: req.UID, Deleted: true}, nil
+	return maildomain.DeleteResult{Folder: folder, UID: req.Target.UID, Deleted: true}, nil
 }
 
 // SetFlags adds and/or removes allowlisted flags on one message.
 func (b *Backend) SetFlags(ctx context.Context, req maildomain.FlagsRequest) (maildomain.FlagsResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, b.cfg.OperationTimeout)
 	defer cancel()
-	folder, err := b.normalizeFolder(req.Folder)
+	if req.Target.ID != "" {
+		return maildomain.FlagsResult{}, errors.New("id lookup requires the jmap backend; use uid")
+	}
+	folder, err := b.normalizeFolder(req.Target.Folder)
 	if err != nil {
 		return maildomain.FlagsResult{}, err
 	}
-	if err := maildomain.ValidateUID(req.UID); err != nil {
+	if err := maildomain.ValidateUID(req.Target.UID); err != nil {
 		return maildomain.FlagsResult{}, err
 	}
 	add, remove, err := maildomain.NormalizeFlags(req.Add, req.Remove)
@@ -142,7 +152,7 @@ func (b *Backend) SetFlags(ctx context.Context, req maildomain.FlagsRequest) (ma
 	}
 	defer cleanup()
 
-	set := imapv2.UIDSetNum(imapv2.UID(req.UID))
+	set := imapv2.UIDSetNum(imapv2.UID(req.Target.UID))
 	if len(add) > 0 {
 		if err := storeAdd(c, set, toIMAPFlags(add)); err != nil {
 			return maildomain.FlagsResult{}, err
@@ -154,7 +164,7 @@ func (b *Backend) SetFlags(ctx context.Context, req maildomain.FlagsRequest) (ma
 			return maildomain.FlagsResult{}, fmt.Errorf("remove flags: %w", err)
 		}
 	}
-	return maildomain.FlagsResult{Folder: folder, UID: req.UID, Added: add, Removed: remove}, nil
+	return maildomain.FlagsResult{Folder: folder, UID: req.Target.UID, Added: add, Removed: remove}, nil
 }
 
 func (b *Backend) connectSelectedWrite(ctx context.Context, folder string) (*imapclient.Client, func(), error) {

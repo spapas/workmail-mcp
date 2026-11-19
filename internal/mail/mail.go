@@ -3,6 +3,8 @@ package mail
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"time"
 )
 
@@ -26,6 +28,9 @@ type AttachmentMeta struct {
 	ContentType string `json:"content_type,omitempty"`
 	Size        int64  `json:"size"`
 	TooLarge    bool   `json:"too_large,omitempty"`
+	// ID holds the server-issued blob identity (JMAP Blob id).
+	// IMAP-only metadata leaves it empty and uses Index instead.
+	ID string `json:"id,omitempty"`
 }
 
 // MessageSummary contains bounded metadata for one message.
@@ -40,6 +45,9 @@ type MessageSummary struct {
 	MessageID string    `json:"message_id,omitempty"`
 	InReplyTo []string  `json:"in_reply_to,omitempty"`
 	Size      int64     `json:"size"`
+	// ID holds the server-issued string identity (JMAP Email id).
+	// IMAP-only summaries leave it empty and use UID instead.
+	ID string `json:"id,omitempty"`
 	// Flags holds the IMAP flags reported for the message (for example
 	// \Seen, \Flagged, \Answered, \Draft, \Deleted), as returned by FETCH FLAGS.
 	Flags []string `json:"flags,omitempty"`
@@ -81,13 +89,51 @@ type SearchQuery struct {
 	Limit   int
 }
 
+// Ref identifies one message by backend-native identity: IMAP UID
+// or JMAP string id. Exactly one of UID, ID must be set.
+type Ref struct {
+	Folder string
+	UID    uint32
+	ID     string
+}
+
+// NormalizeRef trims and validates a message reference, falling back
+// to def when folder is empty. UID and ID are mutually exclusive.
+func NormalizeRef(folder, def string, uid uint32, id string) (Ref, error) {
+	folder = strings.TrimSpace(folder)
+	if folder == "" {
+		folder = def
+	}
+
+	if folder == "" || len(folder) > 1024 || strings.ContainsAny(folder, "\x00\r\n") {
+		return Ref{}, errors.New("invalid folder name")
+	}
+
+	id = strings.TrimSpace(id)
+	if uid != 0 && id != "" {
+		return Ref{}, errors.New("uid and id are mutually exclusive")
+	}
+
+	if uid == 0 && id == "" {
+		return Ref{}, errors.New("uid or id is required")
+	}
+
+	if id != "" {
+		if len(id) > 1024 || strings.ContainsAny(id, "\x00\r\n") {
+			return Ref{}, errors.New("invalid message id")
+		}
+	}
+
+	return Ref{Folder: folder, UID: uid, ID: id}, nil
+}
+
 // Service is the complete read-only capability surface exposed to MCP.
 type Service interface {
 	ListFolders(context.Context) ([]Folder, error)
 	Search(context.Context, SearchQuery) ([]MessageSummary, error)
-	GetMessage(context.Context, string, uint32) (Message, error)
-	GetAttachment(context.Context, string, uint32, int) (Attachment, error)
-	GetThread(context.Context, string, uint32, int) ([]MessageSummary, error)
+	GetMessage(context.Context, Ref) (Message, error)
+	GetAttachment(context.Context, Ref, int) (Attachment, error)
+	GetThread(context.Context, Ref, int) ([]MessageSummary, error)
 	// Stats returns total and unseen message counts for one folder.
 	Stats(context.Context, string) (FolderStats, error)
 }

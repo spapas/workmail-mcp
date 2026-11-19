@@ -12,6 +12,7 @@ import (
 
 	"github.com/spapas/workmail-mcp/internal/config"
 	imapbackend "github.com/spapas/workmail-mcp/internal/imap"
+	jmapbackend "github.com/spapas/workmail-mcp/internal/jmap"
 	maildomain "github.com/spapas/workmail-mcp/internal/mail"
 	mcpserver "github.com/spapas/workmail-mcp/internal/mcp"
 )
@@ -52,7 +53,20 @@ func run() error {
 		return fmt.Errorf("configuration: %w", err)
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	backend := imapbackend.New(cfg)
+
+	// fullBackend serves reads and confirmed writes for one transport.
+	type fullBackend interface {
+		maildomain.Service
+		maildomain.WriteService
+		Doctor(context.Context) error
+	}
+
+	var backend fullBackend
+	if strings.EqualFold(cfg.Backend, "jmap") {
+		backend = jmapbackend.New(cfg)
+	} else {
+		backend = imapbackend.New(cfg)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
@@ -63,13 +77,21 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		if err := cfg.ValidateIMAP(); err != nil {
+		if strings.EqualFold(cfg.Backend, "jmap") {
+			if err := cfg.ValidateJMAP(); err != nil {
+				return fmt.Errorf("configuration: %w", err)
+			}
+		} else if err := cfg.ValidateIMAP(); err != nil {
 			return fmt.Errorf("configuration: %w", err)
 		}
 		if err := backend.Doctor(ctx); err != nil {
 			return err
 		}
-		fmt.Println("OK: IMAPS TLS, authentication, and folder listing succeeded")
+		if strings.EqualFold(cfg.Backend, "jmap") {
+			fmt.Println("OK: JMAP session, authentication, and folder listing succeeded")
+		} else {
+			fmt.Println("OK: IMAPS TLS, authentication, and folder listing succeeded")
+		}
 		if showLatestSubject {
 			messages, err := backend.Search(ctx, maildomain.SearchQuery{Folder: cfg.DefaultFolder, Limit: 1})
 			if err != nil {
@@ -83,7 +105,7 @@ func run() error {
 		}
 		return nil
 	case "stdio":
-		if err := cfg.ValidateIMAP(); err != nil {
+		if err := validateBackend(cfg); err != nil {
 			return fmt.Errorf("configuration: %w", err)
 		}
 		server := mcpserver.NewServer(backend, backend, cfg, logger, version)
@@ -97,6 +119,14 @@ func run() error {
 	default:
 		return fmt.Errorf("unknown command %q; run workmail-mcp help", command)
 	}
+}
+
+func validateBackend(cfg config.Config) error {
+	if strings.EqualFold(cfg.Backend, "jmap") {
+		return cfg.ValidateJMAP()
+	}
+
+	return cfg.ValidateIMAP()
 }
 
 func parseDoctorArgs(args []string) (bool, error) {

@@ -11,14 +11,16 @@ Hermes -------------------- stdio -------------------+
                                                      v
                                               mail.Service
                                                      |
-                                                     v
-                                                IMAP backend
-                                                     |
-                                                     v
-                                               IMAPS / TLS
-                                                     |
-                                                     v
-                                                   Zimbra
+                                  +------------------+------------------+
+                                  |                                     |
+                                  v                                     v
+                            IMAP backend                          JMAP backend
+                                  |                                     |
+                                  v                                     v
+                              IMAPS / TLS                         HTTPS / verified TLS
+                                  |                                (loopback HTTP allowed)
+                                  v                                     |
+                                Zimbra                               Stalwart
 
 OpenAI Secure MCP Tunnel -> localhost HTTP / bearer -+
 ```
@@ -30,6 +32,16 @@ OpenAI Secure MCP Tunnel -> localhost HTTP / bearer -+
 3. **HTTP is local-only.** Configuration validation rejects anything other than loopback IP addresses.
 4. **IMAP/SMTP are encrypted and verified.** Implicit TLS uses hostname/certificate verification and TLS 1.2 or newer; SMTP on other ports requires STARTTLS, except loopback test delivery without AUTH.
 5. **Resource usage is bounded.** Search result count, query length, raw message size, body size, attachment size, thread size, and operation duration have configurable hard limits.
+
+## JMAP backend
+
+`WORKMAIL_BACKEND=jmap` selects the JMAP backend (RFC 8620/8621,
+verified against Stalwart) behind the same `mail.Service` /
+`mail.WriteService` interfaces, so the MCP tools are unchanged.
+Message identity is the server-issued `id` used in place of `uid`;
+threads use native `Thread/get`, and send uses `EmailSubmission`.
+The session `apiUrl` host is never trusted: scheme and host always
+come from `WORKMAIL_JMAP_URL`, only the path is server-advertised.
 
 ## IMAP lifecycle
 

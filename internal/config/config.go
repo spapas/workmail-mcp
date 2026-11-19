@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -28,6 +29,7 @@ const (
 
 // Config contains runtime settings for the workmail bridge.
 type Config struct {
+	Backend            string
 	IMAPHost           string
 	IMAPPort           int
 	IMAPUsername       string
@@ -37,6 +39,10 @@ type Config struct {
 	SMTPUsername       string
 	SMTPPassword       string
 	SMTPFrom           string
+	JMAPURL            string
+	JMAPUsername       string
+	JMAPPassword       string
+	JMAPAccount        string
 	HTTPAddr           string
 	APIToken           string
 	DefaultFolder      string
@@ -65,8 +71,13 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	jmapPassword, err := readSecret("WORKMAIL_JMAP_PASSWORD", "WORKMAIL_JMAP_PASSWORD_FILE")
+	if err != nil {
+		return Config{}, err
+	}
 
 	cfg := Config{
+		Backend:            envOr("WORKMAIL_BACKEND", "imap"),
 		IMAPHost:           strings.TrimSpace(os.Getenv("WORKMAIL_IMAP_HOST")),
 		IMAPPort:           defaultIMAPPort,
 		IMAPUsername:       strings.TrimSpace(os.Getenv("WORKMAIL_IMAP_USERNAME")),
@@ -76,6 +87,10 @@ func Load() (Config, error) {
 		SMTPUsername:       strings.TrimSpace(os.Getenv("WORKMAIL_SMTP_USERNAME")),
 		SMTPPassword:       smtpPassword,
 		SMTPFrom:           strings.TrimSpace(os.Getenv("WORKMAIL_SMTP_FROM")),
+		JMAPURL:            strings.TrimSpace(os.Getenv("WORKMAIL_JMAP_URL")),
+		JMAPUsername:       strings.TrimSpace(os.Getenv("WORKMAIL_JMAP_USERNAME")),
+		JMAPPassword:       jmapPassword,
+		JMAPAccount:        strings.TrimSpace(os.Getenv("WORKMAIL_JMAP_ACCOUNT")),
 		HTTPAddr:           envOr("WORKMAIL_HTTP_ADDR", defaultHTTPAddr),
 		APIToken:           token,
 		DefaultFolder:      envOr("WORKMAIL_DEFAULT_FOLDER", defaultFolder),
@@ -102,6 +117,14 @@ func Load() (Config, error) {
 	}
 	if cfg.SMTPFrom == "" {
 		cfg.SMTPFrom = cfg.SMTPUsername
+	}
+	// Zero-config JMAP: reuse the IMAP identity unless explicit
+	// WORKMAIL_JMAP_* overrides are provided.
+	if cfg.JMAPUsername == "" {
+		cfg.JMAPUsername = cfg.IMAPUsername
+	}
+	if cfg.JMAPPassword == "" {
+		cfg.JMAPPassword = cfg.IMAPPassword
 	}
 
 	if err := loadInt("WORKMAIL_IMAP_PORT", &cfg.IMAPPort); err != nil {
@@ -172,7 +195,11 @@ func (c Config) ValidateIMAP() error {
 // ValidateHTTP checks settings required for localhost HTTP MCP mode.
 func (c Config) ValidateHTTP() error {
 	var errs []error
-	if err := c.ValidateIMAP(); err != nil {
+	if strings.EqualFold(c.Backend, "jmap") {
+		if err := c.ValidateJMAP(); err != nil {
+			errs = append(errs, err)
+		}
+	} else if err := c.ValidateIMAP(); err != nil {
 		errs = append(errs, err)
 	}
 	if err := ValidateLoopbackAddr(c.HTTPAddr); err != nil {
@@ -205,6 +232,59 @@ func (c Config) ValidateSMTP() error {
 	return errors.Join(errs...)
 }
 
+// ValidateJMAP checks settings required for JMAP backend access.
+func (c Config) ValidateJMAP() error {
+	var errs []error
+	if strings.TrimSpace(c.JMAPURL) == "" {
+		errs = append(errs, errors.New("WORKMAIL_JMAP_URL is required (for example http://127.0.0.1:8080)"))
+	} else if err := validateJMAPURL(c.JMAPURL); err != nil {
+		errs = append(errs, err)
+	}
+	if c.JMAPUsername == "" {
+		errs = append(errs, errors.New("WORKMAIL_JMAP_USERNAME is required (defaults to WORKMAIL_IMAP_USERNAME)"))
+	}
+	if c.JMAPPassword == "" {
+		errs = append(errs, errors.New("WORKMAIL_JMAP_PASSWORD or WORKMAIL_JMAP_PASSWORD_FILE is required (defaults to the IMAP password)"))
+	}
+	if err := validateFolder(c.DefaultFolder); err != nil {
+		errs = append(errs, fmt.Errorf("WORKMAIL_DEFAULT_FOLDER: %w", err))
+	}
+	return errors.Join(errs...)
+}
+
+// validateJMAPURL requires http(s) URLs, with plain http limited to
+// loopback hosts. Plain http to non-loopback hosts would expose the
+// account password on the network.
+func validateJMAPURL(raw string) error {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return fmt.Errorf("WORKMAIL_JMAP_URL: %w", err)
+	}
+
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("WORKMAIL_JMAP_URL must use http or https, got %q", u.Scheme)
+	}
+
+	if u.Host == "" {
+		return fmt.Errorf("WORKMAIL_JMAP_URL must include a host")
+	}
+
+	if u.Scheme == "http" {
+		host := u.Hostname()
+		if strings.EqualFold(host, "localhost") {
+			return nil
+		}
+
+		if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+			return nil
+		}
+
+		return fmt.Errorf("WORKMAIL_JMAP_URL plain http is allowed only for loopback hosts, got %q", host)
+	}
+
+	return nil
+}
+
 // ValidateLoopbackAddr rejects addresses that can expose the HTTP server beyond localhost.
 func ValidateLoopbackAddr(addr string) error {
 	host, port, err := net.SplitHostPort(addr)
@@ -222,6 +302,9 @@ func ValidateLoopbackAddr(addr string) error {
 }
 
 func (c Config) validateLimits() error {
+	if c.Backend != "" && c.Backend != "imap" && c.Backend != "jmap" {
+		return fmt.Errorf("WORKMAIL_BACKEND must be imap or jmap, got %q", c.Backend)
+	}
 	if c.IMAPPort < 1 || c.IMAPPort > 65535 {
 		return errors.New("WORKMAIL_IMAP_PORT must be between 1 and 65535")
 	}

@@ -25,17 +25,17 @@ func (f *fakeWriter) SendMessage(_ context.Context, req maildomain.SendRequest) 
 
 func (f *fakeWriter) MoveMessage(_ context.Context, req maildomain.MoveRequest) (maildomain.MoveResult, error) {
 	f.moved = append(f.moved, req)
-	return maildomain.MoveResult{Folder: req.Folder, UID: req.UID, Dest: req.Dest, Moved: true}, nil
+	return maildomain.MoveResult{Folder: req.Target.Folder, UID: req.Target.UID, ID: req.Target.ID, Dest: req.Dest, Moved: true}, nil
 }
 
 func (f *fakeWriter) DeleteMessage(_ context.Context, req maildomain.DeleteRequest) (maildomain.DeleteResult, error) {
 	f.deleted = append(f.deleted, req)
-	return maildomain.DeleteResult{Folder: req.Folder, UID: req.UID, Deleted: true}, nil
+	return maildomain.DeleteResult{Folder: req.Target.Folder, UID: req.Target.UID, ID: req.Target.ID, Deleted: true}, nil
 }
 
 func (f *fakeWriter) SetFlags(_ context.Context, req maildomain.FlagsRequest) (maildomain.FlagsResult, error) {
 	f.flagged = append(f.flagged, req)
-	return maildomain.FlagsResult{Folder: req.Folder, UID: req.UID, Added: req.Add, Removed: req.Remove}, nil
+	return maildomain.FlagsResult{Folder: req.Target.Folder, UID: req.Target.UID, ID: req.Target.ID, Added: req.Add, Removed: req.Remove}, nil
 }
 
 func testToolSet() (*toolSet, *fakeWriter) {
@@ -88,8 +88,36 @@ func TestDeleteConfirmExecutesFrozenPayload(t *testing.T) {
 	if _, _, err := ts.confirm(ctx, req, confirmInput{PendingID: pending.PendingID}); err != nil {
 		t.Fatalf("confirm failed: %v", err)
 	}
-	if len(w.deleted) != 1 || w.deleted[0].UID != 42 {
+	if len(w.deleted) != 1 || w.deleted[0].Target.UID != 42 {
 		t.Fatalf("unexpected delete calls: %+v", w.deleted)
+	}
+}
+
+func TestDeleteRequestAcceptsID(t *testing.T) {
+	ts, w := testToolSet()
+	ctx := context.Background()
+	req := &mcpsdk.CallToolRequest{}
+	_, pending, err := ts.deleteRequest(ctx, req, deleteRequestInput{Folder: "INBOX", ID: "abc"})
+	if err != nil {
+		t.Fatalf("deleteRequest with id failed: %v", err)
+	}
+	if _, _, err := ts.confirm(ctx, req, confirmInput{PendingID: pending.PendingID}); err != nil {
+		t.Fatalf("confirm failed: %v", err)
+	}
+	if len(w.deleted) != 1 || w.deleted[0].Target.ID != "abc" {
+		t.Fatalf("unexpected delete calls: %+v", w.deleted)
+	}
+}
+
+func TestRefInputsRejectBothOrNeither(t *testing.T) {
+	ts, _ := testToolSet()
+	ctx := context.Background()
+	req := &mcpsdk.CallToolRequest{}
+	if _, _, err := ts.getMessage(ctx, req, getInput{Folder: "INBOX"}); err == nil {
+		t.Fatal("expected missing identity error")
+	}
+	if _, _, err := ts.getMessage(ctx, req, getInput{Folder: "INBOX", UID: 1, ID: "abc"}); err == nil {
+		t.Fatal("expected uid+id conflict error")
 	}
 }
 
